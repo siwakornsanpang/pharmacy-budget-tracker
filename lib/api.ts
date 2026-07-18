@@ -40,17 +40,22 @@ export async function api<T>(
     }
   }
 
+  const url = `${API_URL}${path}`;
+
   let response: Response;
   try {
-    response = await fetch(`${API_URL}${path}`, {
+    response = await fetch(url, {
       ...rest,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
+    const isLocalFallback = API_URL.includes("localhost");
     throw new ApiError(
       0,
-      "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ถ้ารอบแรกหลังพัก อาจต้องรอสักครู่แล้วลองใหม่",
+      isLocalFallback
+        ? "ยังไม่ได้ตั้ง NEXT_PUBLIC_API_URL บน Vercel — ให้ใส่ URL ของ Render แล้ว Redeploy"
+        : `เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ (${API_URL}) ถ้ารอบแรกหลังพัก รอ ~1 นาทีแล้วลองใหม่`,
     );
   }
 
