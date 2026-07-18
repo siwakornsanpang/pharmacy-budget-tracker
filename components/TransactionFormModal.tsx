@@ -26,7 +26,7 @@ export function TransactionFormModal({
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState(
     () => getDefaultCategories()[0] ?? "อื่นๆ",
-  )
+  );
   const [transactionDate, setTransactionDate] = useState(
     new Date().toISOString().slice(0, 10),
   );
