@@ -48,7 +48,7 @@ Health check: `http://localhost:8080/health`
 1. New **Web Service** → connect this GitHub repo
 2. **Root Directory:** `backend`
 3. **Runtime:** Node
-4. **Build Command:** `npm install && npm run build && npm run db:push`
+4. **Build Command:** `npm install --include=dev && npm run build && npm run db:push`
 5. **Start Command:** `npm start`
 6. **Instance type:** Free
 7. Environment variables:

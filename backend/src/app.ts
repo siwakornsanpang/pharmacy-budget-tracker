@@ -13,7 +13,10 @@ export async function buildApp() {
 
   const corsOrigin = process.env.CORS_ORIGIN ?? "*";
   await app.register(cors, {
-    origin: corsOrigin === "*" ? true : corsOrigin.split(",").map((s) => s.trim()),
+    origin:
+      corsOrigin === "*"
+        ? true
+        : corsOrigin.split(",").map((s: string) => s.trim()),
     credentials: true,
   });
 
