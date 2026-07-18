@@ -48,14 +48,17 @@ Health check: `http://localhost:8080/health`
 1. New **Web Service** → connect this GitHub repo
 2. **Root Directory:** `backend`
 3. **Runtime:** Node
-4. **Build Command:** `npm install --include=dev && npm run build && npm run db:push`
+4. **Build Command:** `npm install --include=dev && npm run build`
 5. **Start Command:** `npm start`
 6. **Instance type:** Free
 7. Environment variables:
-   - `DATABASE_URL` = Supabase Postgres URI
+   - `DATABASE_URL` = Supabase Postgres URI (เพิ่ม `?sslmode=require` ท้าย URL)
    - `JWT_SECRET` = long random string
    - `CORS_ORIGIN` = your Vercel URL (e.g. `https://xxx.vercel.app`)
    - `NODE_ENV` = `production`
+   - `NODE_VERSION` = `22`
+
+> Schema/table: รัน `npm run db:push` จากเครื่องคุณก่อน (ไม่ใส่ใน Build บน Render เพราะมักค้าง)
 
 8. After deploy, open `https://YOUR-SERVICE.onrender.com/health`
 
