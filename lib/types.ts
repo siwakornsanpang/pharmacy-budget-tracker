@@ -6,6 +6,7 @@ export type Project = {
   startDate: string;
   endDate: string;
   owner: string;
+  createdAt?: string;
 };
 
 export type Transaction = {
@@ -17,6 +18,7 @@ export type Transaction = {
   amount: number;
   to: string;
   note?: string;
+  receiptUrl?: string;
   createdAt?: string;
 };
 
@@ -24,6 +26,7 @@ export type ProjectWithStats = Project & {
   spent: number;
   remaining: number;
   percentUsed: number;
-  variance: number;
-  variancePct: number;
+  variance?: number;
+  variancePct?: number;
+  status?: "active" | "completed";
 };

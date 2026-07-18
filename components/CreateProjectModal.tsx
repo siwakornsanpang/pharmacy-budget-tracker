@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import type { Project } from "@/lib/types";
+import type { ProjectInput } from "@/lib/api-services";
 
 type CreateProjectModalProps = {
   open: boolean;
   onClose: () => void;
-  onCreate: (project: Project) => void;
+  onCreate: (project: ProjectInput) => Promise<void>;
 };
 
 export function CreateProjectModal({
@@ -23,6 +23,7 @@ export function CreateProjectModal({
   const [endDate, setEndDate] = useState("");
   const [owner, setOwner] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   if (!open) return null;
 
@@ -36,7 +37,7 @@ export function CreateProjectModal({
     setError("");
   }
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const parsedBudget = Number(budget.replace(/,/g, ""));
     if (
@@ -58,17 +59,24 @@ export function CreateProjectModal({
       return;
     }
 
-    onCreate({
-      id: `proj-${Date.now()}`,
-      name: name.trim(),
-      description: description.trim(),
-      budget: parsedBudget,
-      startDate,
-      endDate,
-      owner: owner.trim(),
-    });
-    reset();
-    onClose();
+    setLoading(true);
+    setError("");
+    try {
+      await onCreate({
+        name: name.trim(),
+        description: description.trim(),
+        budget: parsedBudget,
+        startDate,
+        endDate,
+        owner: owner.trim(),
+      });
+      reset();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "สร้างโครงการไม่สำเร็จ");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -78,6 +86,7 @@ export function CreateProjectModal({
         className="absolute inset-0 bg-[#2a2a14]/40 backdrop-blur-[2px]"
         aria-label="ปิด"
         onClick={() => {
+          if (loading) return;
           reset();
           onClose();
         }}
@@ -154,19 +163,21 @@ export function CreateProjectModal({
           <div className="flex gap-2 sm:col-span-2 sm:justify-end">
             <button
               type="button"
+              disabled={loading}
               onClick={() => {
                 reset();
                 onClose();
               }}
-              className="h-10 rounded-lg border border-border px-4 text-sm font-medium text-fg-muted hover:border-accent hover:text-accent"
+              className="h-10 rounded-lg border border-border px-4 text-sm font-medium text-fg-muted hover:border-accent hover:text-accent disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="h-10 rounded-lg bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-hover"
+              disabled={loading}
+              className="h-10 rounded-lg bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
             >
-              Create Project
+              {loading ? "Saving..." : "Create Project"}
             </button>
           </div>
         </form>

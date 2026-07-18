@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { clearStoredUser, type AuthUser } from "@/lib/auth";
+import { clearStoredAuth, type AuthUser } from "@/lib/auth";
 
 type AppHeaderProps = {
   user: AuthUser;
@@ -20,7 +20,7 @@ export function AppHeader({
   const router = useRouter();
 
   function handleLogout() {
-    clearStoredUser();
+    clearStoredAuth();
     router.replace("/login");
   }
 

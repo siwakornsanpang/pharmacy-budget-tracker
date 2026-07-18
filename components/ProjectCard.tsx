@@ -90,7 +90,11 @@ export function ProjectCard({ project, index = 0 }: ProjectCardProps) {
             project.remaining < 0 ? "font-medium text-danger" : "text-fg-subtle"
           }
         >
-          {project.remaining < 0 ? "Over budget" : "On track"}
+          {project.remaining < 0
+            ? "Over budget"
+            : project.status === "completed"
+              ? "Completed"
+              : "On track"}
         </span>
       </div>
       <div className="mt-1 text-right text-xs text-accent opacity-0 transition group-hover:opacity-100">

@@ -5,114 +5,103 @@ import { AuthGate } from "@/components/AuthGate";
 import { AppHeader } from "@/components/AppHeader";
 import { ProjectCard, isProjectCompleted } from "@/components/ProjectCard";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
-import { addProject, loadProjects, loadTransactions } from "@/lib/storage";
+import { ApiError } from "@/lib/api";
 import {
-  calcPercentUsed,
-  formatCurrency,
-  formatSignedCurrency,
-} from "@/lib/format";
+  createProject,
+  fetchProjects,
+  type ProjectInput,
+} from "@/lib/api-services";
+import { formatCurrency } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
-import type { Project, ProjectWithStats } from "@/lib/types";
+import type { ProjectWithStats } from "@/lib/types";
 
 type StatusFilter = "all" | "active" | "completed";
-
-function buildProjectStats(
-  projects: Project[],
-  transactions: ReturnType<typeof loadTransactions>,
-): ProjectWithStats[] {
-  return projects.map((project) => {
-    const spent = transactions
-      .filter((t) => t.projectId === project.id)
-      .reduce((sum, t) => sum + t.amount, 0);
-    const variance = spent - project.budget;
-
-    return {
-      ...project,
-      spent,
-      remaining: project.budget - spent,
-      percentUsed: calcPercentUsed(spent, project.budget),
-      variance,
-      variancePct:
-        project.budget > 0
-          ? Math.round((variance / project.budget) * 1000) / 10
-          : 0,
-    };
-  });
-}
 
 export default function ProjectsPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [transactions, setTransactions] = useState<
-    ReturnType<typeof loadTransactions>
-  >([]);
+  const [projects, setProjects] = useState<ProjectWithStats[]>([]);
   const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
 
+  async function load(status: StatusFilter = statusFilter, q = query) {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await fetchProjects({
+        status,
+        q: q.trim() || undefined,
+      });
+      setProjects(data);
+      setReady(true);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "โหลดโครงการไม่สำเร็จ",
+      );
+      setReady(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    setProjects(loadProjects());
-    setTransactions(loadTransactions());
-    setReady(true);
+    void load("all", "");
+    // initial load only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const withStats = useMemo(
-    () => buildProjectStats(projects, transactions),
-    [projects, transactions],
-  );
+  useEffect(() => {
+    if (!ready) return;
+    const timer = window.setTimeout(() => {
+      void load(statusFilter, query);
+    }, 250);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, query]);
 
-  const filtered = useMemo(() => {
-    return withStats.filter((p) => {
-      const q = query.toLowerCase();
-      const matchQuery =
-        !q ||
-        p.name.toLowerCase().includes(q) ||
-        p.owner.toLowerCase().includes(q);
-
-      if (!matchQuery) return false;
-
-      const completed = isProjectCompleted(p.endDate);
-      if (statusFilter === "active") return !completed;
-      if (statusFilter === "completed") return completed;
-      return true;
-    });
-  }, [withStats, query, statusFilter]);
-
-  const statusCounts = useMemo(() => {
-    const completed = withStats.filter((p) =>
-      isProjectCompleted(p.endDate),
-    ).length;
-    return {
-      all: withStats.length,
-      active: withStats.length - completed,
-      completed,
-    };
-  }, [withStats]);
+  const [allProjects, setAllProjects] = useState<ProjectWithStats[]>([]);
+  useEffect(() => {
+    fetchProjects({ status: "all" })
+      .then(setAllProjects)
+      .catch(() => undefined);
+  }, [projects.length]);
 
   const portfolio = useMemo(() => {
-    const budget = withStats.reduce((s, p) => s + p.budget, 0);
-    const spent = withStats.reduce((s, p) => s + p.spent, 0);
-    const overCount = withStats.filter((p) => p.spent > p.budget).length;
-    const warnCount = withStats.filter(
+    const source = allProjects.length ? allProjects : projects;
+    const budget = source.reduce((s, p) => s + p.budget, 0);
+    const spent = source.reduce((s, p) => s + p.spent, 0);
+    const overCount = source.filter((p) => p.spent > p.budget).length;
+    const warnCount = source.filter(
       (p) => p.percentUsed >= 70 && p.spent <= p.budget,
+    ).length;
+    const completed = source.filter((p) =>
+      p.status ? p.status === "completed" : isProjectCompleted(p.endDate),
     ).length;
     return {
       budget,
       spent,
       remaining: budget - spent,
-      variance: spent - budget,
-      projectCount: withStats.length,
+      projectCount: source.length,
       overCount,
       warnCount,
+      active: source.length - completed,
+      completed,
     };
-  }, [withStats]);
+  }, [allProjects, projects]);
 
-  function handleCreate(project: Project) {
-    const next = addProject(project);
-    setProjects(next);
+  async function handleCreate(input: ProjectInput) {
+    await createProject(input);
+    await load(statusFilter, query);
+    const fresh = await fetchProjects({ status: "all" });
+    setAllProjects(fresh);
   }
 
   function exportPortfolio() {
+    const source = allProjects.length ? allProjects : projects;
     downloadCsv(
       `projects_summary_${new Date().toISOString().slice(0, 10)}.csv`,
       [
@@ -121,31 +110,30 @@ export default function ProjectsPage() {
         "Budget",
         "Spent",
         "Remaining",
-        "Variance",
         "% Used",
         "Start",
         "End",
         "Status",
       ],
-      withStats.map((p) => [
+      source.map((p) => [
         p.name,
         p.owner,
         p.budget,
         p.spent,
         p.remaining,
-        p.variance,
         p.percentUsed,
         p.startDate,
         p.endDate,
-        isProjectCompleted(p.endDate) ? "Completed" : "Active",
+        p.status ??
+          (isProjectCompleted(p.endDate) ? "Completed" : "Active"),
       ]),
     );
   }
 
   const filters: { key: StatusFilter; label: string; count: number }[] = [
-    { key: "all", label: "All", count: statusCounts.all },
-    { key: "active", label: "Active", count: statusCounts.active },
-    { key: "completed", label: "Completed", count: statusCounts.completed },
+    { key: "all", label: "All", count: portfolio.projectCount },
+    { key: "active", label: "Active", count: portfolio.active },
+    { key: "completed", label: "Completed", count: portfolio.completed },
   ];
 
   return (
@@ -254,17 +242,26 @@ export default function ProjectsPage() {
               </div>
             ) : null}
 
-            {!ready ? (
-              <div className="flex justify-center py-20">
+            {error ? (
+              <p className="mb-4 rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">
+                {error}
+              </p>
+            ) : null}
+
+            {!ready || loading ? (
+              <div className="flex flex-col items-center justify-center gap-3 py-20">
                 <div className="h-8 w-8 animate-pulse rounded-full bg-accent-soft" />
+                <p className="text-sm text-fg-subtle">
+                  Loading projects... (ครั้งแรกอาจรอนานหน่อย)
+                </p>
               </div>
-            ) : filtered.length === 0 ? (
+            ) : projects.length === 0 ? (
               <p className="animate-fade-in py-20 text-center text-fg-muted">
-                ไม่พบโครงการตามเงื่อนไขที่เลือก
+                ยังไม่มีโครงการ หรือไม่พบตามเงื่อนไขที่เลือก
               </p>
             ) : (
               <div className="grid gap-5 sm:grid-cols-2">
-                {filtered.map((project, i) => (
+                {projects.map((project, i) => (
                   <ProjectCard key={project.id} project={project} index={i} />
                 ))}
               </div>

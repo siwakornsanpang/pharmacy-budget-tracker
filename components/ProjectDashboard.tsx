@@ -14,6 +14,13 @@ import { FinanceCharts } from "@/components/FinanceCharts";
 import { AccountantKpis } from "@/components/AccountantKpis";
 import { BudgetAlerts } from "@/components/BudgetAlerts";
 import { VendorSummary } from "@/components/VendorSummary";
+import { ApiError } from "@/lib/api";
+import {
+  createTransaction,
+  deleteTransaction,
+  fetchProject,
+  fetchTransactions,
+} from "@/lib/api-services";
 import { computeFinanceMetrics } from "@/lib/finance-metrics";
 import { getDefaultCategories } from "@/lib/categories";
 import {
@@ -25,13 +32,6 @@ import {
   formatCurrencyPrecise,
   formatDate,
 } from "@/lib/format";
-import {
-  loadProjects,
-  loadProjectTransactions,
-  loadTransactions,
-  saveTransactions,
-  upsertTransaction,
-} from "@/lib/storage";
 import type { Project, Transaction } from "@/lib/types";
 
 type ProjectDashboardProps = {
@@ -50,12 +50,33 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
   const defaults = getDefaultCategories();
   const [project, setProject] = useState<Project | null>(null);
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
+  async function reload() {
+    setLoadError("");
+    try {
+      const [projectData, txnData] = await Promise.all([
+        fetchProject(projectId),
+        fetchTransactions(projectId),
+      ]);
+      setProject(projectData);
+      setTransactions(txnData);
+    } catch (err) {
+      setProject(null);
+      setTransactions([]);
+      setLoadError(
+        err instanceof ApiError ? err.message : "โหลดข้อมูลไม่สำเร็จ",
+      );
+    } finally {
+      setReady(true);
+    }
+  }
+
   useEffect(() => {
-    setProject(loadProjects().find((p) => p.id === projectId) ?? null);
-    setTransactions(loadProjectTransactions(projectId));
-    setReady(true);
+    setReady(false);
+    void reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   const [showForm, setShowForm] = useState(false);
@@ -68,6 +89,7 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
   const [to, setTo] = useState("");
   const [note, setNote] = useState("");
   const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -161,7 +183,7 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
     setFormError("");
   }
 
-  function handleAddTransaction(e: FormEvent) {
+  async function handleAddTransaction(e: FormEvent) {
     e.preventDefault();
     setFormError("");
 
@@ -175,29 +197,36 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
       return;
     }
 
-    const newTxn: Transaction = {
-      id: `TXN-${Date.now().toString(36).toUpperCase()}`,
-      projectId,
-      title: title.trim(),
-      category: category.trim(),
-      transactionDate,
-      amount: parsedAmount,
-      to: to.trim(),
-      note: note.trim() || undefined,
-      createdAt: new Date().toISOString(),
-    };
-
-    upsertTransaction(newTxn);
-    setTransactions(loadProjectTransactions(projectId));
-    resetForm();
-    setShowForm(false);
+    setSaving(true);
+    try {
+      await createTransaction(projectId, {
+        title: title.trim(),
+        category: category.trim(),
+        transactionDate,
+        amount: parsedAmount,
+        to: to.trim(),
+        note: note.trim() || undefined,
+      });
+      await reload();
+      resetForm();
+      setShowForm(false);
+    } catch (err) {
+      setFormError(
+        err instanceof ApiError ? err.message : "บันทึกรายการไม่สำเร็จ",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
     if (!confirm("ลบรายการนี้ใช่ไหม? ตัวเลขงบจะเปลี่ยนตามด้วย")) return;
-    const next = loadTransactions().filter((t) => t.id !== id);
-    saveTransactions(next);
-    setTransactions(loadProjectTransactions(projectId));
+    try {
+      await deleteTransaction(id);
+      await reload();
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "ลบรายการไม่สำเร็จ");
+    }
   }
 
   function toggleSort(key: SortKey) {
@@ -227,8 +256,22 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
               backHref="/projects"
               backLabel="Projects"
             />
-            <main className="mx-auto flex w-full max-w-6xl flex-1 items-center justify-center px-6 py-20">
-              <p className="text-fg-muted">ไม่พบโครงการนี้</p>
+            <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-3 px-6 py-20">
+              <p className="text-fg-muted">
+                {loadError || "ไม่พบโครงการนี้"}
+              </p>
+              {loadError ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReady(false);
+                    void reload();
+                  }}
+                  className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white"
+                >
+                  ลองใหม่
+                </button>
+              ) : null}
             </main>
           </div>
         )}
@@ -477,9 +520,10 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                   <div className="flex items-end sm:col-span-2 lg:col-span-3">
                     <button
                       type="submit"
-                      className="h-11 rounded-lg bg-accent px-6 text-sm font-semibold text-white transition hover:bg-accent-hover"
+                      disabled={saving}
+                      className="h-11 rounded-lg bg-accent px-6 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:opacity-60"
                     >
-                      Save
+                      {saving ? "Saving..." : "Save"}
                     </button>
                   </div>
                   {formError ? (

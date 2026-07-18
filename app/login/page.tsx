@@ -2,12 +2,16 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { getStoredUser, setStoredUser } from "@/lib/auth";
+import { ApiError } from "@/lib/api";
+import { loginRequest, registerRequest } from "@/lib/api-services";
+import { getStoredUser, setStoredAuth } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -20,26 +24,42 @@ export default function LoginPage() {
     }
   }, [router]);
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
 
     if (!username.trim() || !password.trim()) {
-      setError("กรุณากรอกชื่อผู้ใช้และรหัสผ่าน");
+      setError("กรุณากรอก Username และ Password");
+      return;
+    }
+
+    if (mode === "register" && password.trim().length < 6) {
+      setError("Password ต้องยาวอย่างน้อย 6 ตัวอักษร");
       return;
     }
 
     setLoading(true);
+    try {
+      const result =
+        mode === "login"
+          ? await loginRequest(username.trim(), password)
+          : await registerRequest(
+              username.trim(),
+              password,
+              name.trim() || undefined,
+            );
 
-    // Frontend-only mock login — any credentials work
-    window.setTimeout(() => {
-      const trimmed = username.trim();
-      setStoredUser({
-        username: trimmed,
-        name: trimmed.charAt(0).toUpperCase() + trimmed.slice(1),
-      });
+      setStoredAuth(result.token, result.user);
       router.replace("/projects");
-    }, 600);
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : "เกิดข้อผิดพลาด กรุณาลองใหม่";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (checking) {
@@ -72,14 +92,63 @@ export default function LoginPage() {
           <p className="mb-3 font-[family-name:var(--font-display)] text-4xl font-semibold tracking-tight text-accent sm:text-5xl">
             Budget Tracker
           </p>
-          <p className="mb-10 max-w-sm text-base leading-relaxed text-fg-muted">
-            เข้าสู่ระบบเพื่อดูงบและรายจ่ายของทุกโครงการ
+          <p className="mb-8 max-w-sm text-base leading-relaxed text-fg-muted">
+            {mode === "login"
+              ? "เข้าสู่ระบบเพื่อดูงบและรายจ่ายของทุกโครงการ"
+              : "สมัครบัญชีใหม่เพื่อเริ่มติดตามงบโครงการ"}
           </p>
+
+          <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl border border-border bg-surface/70 p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setMode("login");
+                setError("");
+              }}
+              className={`h-9 rounded-lg text-sm font-medium transition ${
+                mode === "login"
+                  ? "bg-accent text-white"
+                  : "text-fg-muted hover:text-fg"
+              }`}
+            >
+              Login
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("register");
+                setError("");
+              }}
+              className={`h-9 rounded-lg text-sm font-medium transition ${
+                mode === "register"
+                  ? "bg-accent text-white"
+                  : "text-fg-muted hover:text-fg"
+              }`}
+            >
+              Register
+            </button>
+          </div>
 
           <form
             onSubmit={handleSubmit}
             className="flex flex-col gap-5 rounded-2xl border border-border bg-surface/90 p-8 shadow-[var(--shadow)] backdrop-blur-sm"
           >
+            {mode === "register" ? (
+              <div className="flex flex-col gap-2">
+                <label htmlFor="name" className="text-sm font-medium text-fg">
+                  Display Name
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="ชื่อที่แสดง (ไม่บังคับ)"
+                  className="h-11 rounded-lg border border-border bg-bg-elevated px-3.5 text-sm text-fg outline-none transition placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                />
+              </div>
+            ) : null}
+
             <div className="flex flex-col gap-2">
               <label htmlFor="username" className="text-sm font-medium text-fg">
                 Username
@@ -102,7 +171,9 @@ export default function LoginPage() {
               <input
                 id="password"
                 type="password"
-                autoComplete="current-password"
+                autoComplete={
+                  mode === "login" ? "current-password" : "new-password"
+                }
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -121,11 +192,17 @@ export default function LoginPage() {
               disabled={loading}
               className="mt-1 h-11 rounded-lg bg-accent text-sm font-semibold text-white transition hover:bg-accent-hover disabled:opacity-60"
             >
-              {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
+              {loading
+                ? mode === "login"
+                  ? "กำลังเข้าสู่ระบบ..."
+                  : "กำลังสมัคร..."
+                : mode === "login"
+                  ? "เข้าสู่ระบบ"
+                  : "สมัครสมาชิก"}
             </button>
 
             <p className="text-center text-xs text-fg-subtle">
-              Demo · ใส่ Username / Password อะไรก็ได้
+              ครั้งแรกหลัง API พัก อาจรอโหลดนาน ~1 นาที
             </p>
           </form>
         </div>

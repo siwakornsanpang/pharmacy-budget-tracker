@@ -1,11 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  addCategory,
-  getDefaultCategories,
-  getStoredCategories,
-} from "@/lib/categories";
+import { createCategory, fetchCategories } from "@/lib/api-services";
+import { getDefaultCategories } from "@/lib/categories";
 
 type CategorySelectProps = {
   value: string;
@@ -17,9 +14,24 @@ export function CategorySelect({ value, onChange }: CategorySelectProps) {
   const [adding, setAdding] = useState(false);
   const [newCategory, setNewCategory] = useState("");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setCategories(getStoredCategories());
+    let cancelled = false;
+    fetchCategories()
+      .then((rows) => {
+        if (cancelled) return;
+        const names = rows.map((r) => r.name);
+        setCategories(names.length ? names : getDefaultCategories());
+        if (!value && names[0]) onChange(names[0]);
+      })
+      .catch(() => {
+        if (!cancelled) setCategories(getDefaultCategories());
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleSelectChange(next: string) {
@@ -31,18 +43,30 @@ export function CategorySelect({ value, onChange }: CategorySelectProps) {
     onChange(next);
   }
 
-  function handleAdd() {
+  async function handleAdd() {
     const trimmed = newCategory.trim();
     if (!trimmed) {
       setError("กรุณาใส่ชื่อหมวดหมู่");
       return;
     }
-    const next = addCategory(trimmed, categories);
-    setCategories(next);
-    onChange(trimmed);
-    setNewCategory("");
-    setAdding(false);
+
+    setSaving(true);
     setError("");
+    try {
+      const created = await createCategory(trimmed);
+      setCategories((prev) =>
+        prev.some((c) => c.toLowerCase() === created.name.toLowerCase())
+          ? prev
+          : [...prev, created.name],
+      );
+      onChange(created.name);
+      setNewCategory("");
+      setAdding(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "เพิ่มหมวดหมู่ไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleCancel() {
@@ -62,7 +86,7 @@ export function CategorySelect({ value, onChange }: CategorySelectProps) {
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                handleAdd();
+                void handleAdd();
               }
               if (e.key === "Escape") handleCancel();
             }}
@@ -71,13 +95,15 @@ export function CategorySelect({ value, onChange }: CategorySelectProps) {
           />
           <button
             type="button"
-            onClick={handleAdd}
-            className="h-11 shrink-0 rounded-lg bg-accent px-3 text-sm font-semibold text-white transition hover:bg-accent-hover"
+            disabled={saving}
+            onClick={() => void handleAdd()}
+            className="h-11 shrink-0 rounded-lg bg-accent px-3 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:opacity-60"
           >
-            เพิ่ม
+            {saving ? "..." : "เพิ่ม"}
           </button>
           <button
             type="button"
+            disabled={saving}
             onClick={handleCancel}
             className="h-11 shrink-0 rounded-lg border border-border px-3 text-sm font-medium text-fg-muted transition hover:border-accent hover:text-accent"
           >
