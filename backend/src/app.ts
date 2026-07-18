@@ -11,13 +11,17 @@ export async function buildApp() {
     logger: true,
   });
 
-  const corsOrigin = process.env.CORS_ORIGIN ?? "*";
+  // Bearer token auth — no cookies — so we can reflect any browser origin.
+  // CORS_ORIGIN can still restrict to a comma-separated allowlist if set.
+  const corsOrigin = process.env.CORS_ORIGIN?.trim();
   await app.register(cors, {
     origin:
-      corsOrigin === "*"
+      !corsOrigin || corsOrigin === "*"
         ? true
         : corsOrigin.split(",").map((s: string) => s.trim()),
-    credentials: true,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: false,
   });
 
   await registerAuth(app);

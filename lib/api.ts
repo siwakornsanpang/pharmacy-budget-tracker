@@ -55,7 +55,7 @@ export async function api<T>(
       0,
       isLocalFallback
         ? "ยังไม่ได้ตั้ง NEXT_PUBLIC_API_URL บน Vercel — ให้ใส่ URL ของ Render แล้ว Redeploy"
-        : `เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ (${API_URL}) ถ้ารอบแรกหลังพัก รอ ~1 นาทีแล้วลองใหม่`,
+        : `เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ (${API_URL}) — อาจเป็น cold start หรือ CORS ไม่ตรง รอ ~1 นาทีแล้วลองใหม่ หรือเปิด /health ของ API ในแท็บใหม่ก่อน`,
     );
   }
 
