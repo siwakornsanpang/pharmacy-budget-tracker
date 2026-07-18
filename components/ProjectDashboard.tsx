@@ -7,19 +7,26 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/AuthGate";
 import { AppHeader } from "@/components/AppHeader";
 import { CategorySelect } from "@/components/CategorySelect";
+import { CreateProjectModal } from "@/components/CreateProjectModal";
 import { FinanceCharts } from "@/components/FinanceCharts";
 import { AccountantKpis } from "@/components/AccountantKpis";
 import { BudgetAlerts } from "@/components/BudgetAlerts";
 import { VendorSummary } from "@/components/VendorSummary";
+import { DashboardSkeleton } from "@/components/Skeleton";
 import { ApiError } from "@/lib/api";
 import {
   createTransaction,
+  deleteProject,
   deleteTransaction,
   fetchProject,
   fetchTransactions,
+  updateProject,
+  updateTransaction,
+  type ProjectInput,
 } from "@/lib/api-services";
 import { computeFinanceMetrics } from "@/lib/finance-metrics";
 import { getDefaultCategories } from "@/lib/categories";
@@ -47,11 +54,13 @@ function progressTone(percent: number): string {
 }
 
 export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
+  const router = useRouter();
   const defaults = getDefaultCategories();
   const [project, setProject] = useState<Project | null>(null);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [showEditProject, setShowEditProject] = useState(false);
 
   async function reload() {
     setLoadError("");
@@ -80,6 +89,7 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
   }, [projectId]);
 
   const [showForm, setShowForm] = useState(false);
+  const [editingTxnId, setEditingTxnId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState(defaults[0] ?? "อื่นๆ");
   const [transactionDate, setTransactionDate] = useState(
@@ -174,6 +184,7 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
   }, [transactions]);
 
   function resetForm() {
+    setEditingTxnId(null);
     setTitle("");
     setCategory(defaults[0] ?? "อื่นๆ");
     setTransactionDate(new Date().toISOString().slice(0, 10));
@@ -183,7 +194,19 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
     setFormError("");
   }
 
-  async function handleAddTransaction(e: FormEvent) {
+  function startEditTransaction(txn: Transaction) {
+    setEditingTxnId(txn.id);
+    setTitle(txn.title);
+    setCategory(txn.category);
+    setTransactionDate(txn.transactionDate);
+    setAmount(String(txn.amount));
+    setTo(txn.to);
+    setNote(txn.note ?? "");
+    setFormError("");
+    setShowForm(true);
+  }
+
+  async function handleSaveTransaction(e: FormEvent) {
     e.preventDefault();
     setFormError("");
 
@@ -197,16 +220,22 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
       return;
     }
 
+    const payload = {
+      title: title.trim(),
+      category: category.trim(),
+      transactionDate,
+      amount: parsedAmount,
+      to: to.trim(),
+      note: note.trim() || undefined,
+    };
+
     setSaving(true);
     try {
-      await createTransaction(projectId, {
-        title: title.trim(),
-        category: category.trim(),
-        transactionDate,
-        amount: parsedAmount,
-        to: to.trim(),
-        note: note.trim() || undefined,
-      });
+      if (editingTxnId) {
+        await updateTransaction(editingTxnId, payload);
+      } else {
+        await createTransaction(projectId, payload);
+      }
       await reload();
       resetForm();
       setShowForm(false);
@@ -223,9 +252,35 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
     if (!confirm("ลบรายการนี้ใช่ไหม? ตัวเลขงบจะเปลี่ยนตามด้วย")) return;
     try {
       await deleteTransaction(id);
+      if (editingTxnId === id) {
+        resetForm();
+        setShowForm(false);
+      }
       await reload();
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "ลบรายการไม่สำเร็จ");
+    }
+  }
+
+  async function handleUpdateProject(input: ProjectInput) {
+    await updateProject(projectId, input);
+    await reload();
+  }
+
+  async function handleDeleteProject() {
+    if (!project) return;
+    if (
+      !confirm(
+        `ลบโครงการ "${project.name}" ใช่ไหม? รายการธุรกรรมทั้งหมดจะถูกลบด้วย`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteProject(projectId);
+      router.replace("/projects");
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "ลบโครงการไม่สำเร็จ");
     }
   }
 
@@ -240,9 +295,18 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
 
   if (!ready) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-bg">
-        <div className="h-8 w-8 animate-pulse rounded-full bg-accent-soft" />
-      </div>
+      <AuthGate>
+        {(user) => (
+          <div className="flex min-h-full flex-1 flex-col bg-bg">
+            <AppHeader
+              user={user}
+              backHref="/projects"
+              backLabel="Projects"
+            />
+            <DashboardSkeleton />
+          </div>
+        )}
+      </AuthGate>
     );
   }
 
@@ -310,6 +374,20 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                   </h2>
                 </div>
                 <div className="flex flex-wrap gap-2 print:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditProject(true)}
+                    className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-fg-muted transition hover:border-accent hover:text-accent"
+                  >
+                    Edit Project
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteProject()}
+                    className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-fg-muted transition hover:border-danger hover:text-danger"
+                  >
+                    Delete
+                  </button>
                   <button
                     type="button"
                     onClick={() =>
@@ -457,8 +535,13 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                 <button
                   type="button"
                   onClick={() => {
-                    setShowForm((v) => !v);
-                    setFormError("");
+                    if (showForm) {
+                      resetForm();
+                      setShowForm(false);
+                    } else {
+                      resetForm();
+                      setShowForm(true);
+                    }
                   }}
                   className="h-10 rounded-lg bg-accent px-4 text-sm font-semibold text-white transition hover:bg-accent-hover"
                 >
@@ -468,9 +551,12 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
 
               {showForm ? (
                 <form
-                  onSubmit={handleAddTransaction}
+                  onSubmit={handleSaveTransaction}
                   className="mb-6 grid gap-4 rounded-2xl border border-border bg-surface p-6 shadow-[var(--shadow)] sm:grid-cols-2 lg:grid-cols-3"
                 >
+                  <p className="text-sm font-medium text-fg sm:col-span-2 lg:col-span-3">
+                    {editingTxnId ? "แก้ไขรายการ" : "เพิ่มรายการใหม่"}
+                  </p>
                   <Field label="Title">
                     <input
                       value={title}
@@ -517,14 +603,31 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                       className="input"
                     />
                   </Field>
-                  <div className="flex items-end sm:col-span-2 lg:col-span-3">
+                  <div className="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-3">
                     <button
                       type="submit"
                       disabled={saving}
                       className="h-11 rounded-lg bg-accent px-6 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:opacity-60"
                     >
-                      {saving ? "Saving..." : "Save"}
+                      {saving
+                        ? "Saving..."
+                        : editingTxnId
+                          ? "Save Changes"
+                          : "Save"}
                     </button>
+                    {editingTxnId ? (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => {
+                          resetForm();
+                          setShowForm(false);
+                        }}
+                        className="h-11 rounded-lg border border-border px-4 text-sm font-medium text-fg-muted hover:border-accent hover:text-accent disabled:opacity-60"
+                      >
+                        Cancel Edit
+                      </button>
+                    ) : null}
                   </div>
                   {formError ? (
                     <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger sm:col-span-2 lg:col-span-3">
@@ -676,13 +779,22 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                             )}
                           </td>
                           <td className="px-4 py-3 text-right print:hidden">
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(txn.id)}
-                              className="text-xs text-fg-subtle hover:text-danger"
-                            >
-                              ลบ
-                            </button>
+                            <div className="flex items-center justify-end gap-3">
+                              <button
+                                type="button"
+                                onClick={() => startEditTransaction(txn)}
+                                className="text-xs text-fg-subtle hover:text-accent"
+                              >
+                                แก้ไข
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(txn.id)}
+                                className="text-xs text-fg-subtle hover:text-danger"
+                              >
+                                ลบ
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -708,6 +820,13 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
               </div>
             </section>
           </main>
+
+          <CreateProjectModal
+            open={showEditProject}
+            initial={project}
+            onClose={() => setShowEditProject(false)}
+            onSave={handleUpdateProject}
+          />
         </div>
       )}
     </AuthGate>

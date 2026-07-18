@@ -70,6 +70,17 @@ export async function createProject(input: ProjectInput): Promise<Project> {
   return api<Project>("/projects", { method: "POST", body: input });
 }
 
+export async function updateProject(
+  id: string,
+  input: Partial<ProjectInput>,
+): Promise<Project> {
+  return api<Project>(`/projects/${id}`, { method: "PATCH", body: input });
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  await api<void>(`/projects/${id}`, { method: "DELETE" });
+}
+
 export async function fetchTransactions(
   projectId: string,
 ): Promise<Transaction[]> {
@@ -82,6 +93,16 @@ export async function createTransaction(
 ): Promise<Transaction> {
   return api<Transaction>(`/projects/${projectId}/transactions`, {
     method: "POST",
+    body: input,
+  });
+}
+
+export async function updateTransaction(
+  id: string,
+  input: Partial<TransactionInput>,
+): Promise<Transaction> {
+  return api<Transaction>(`/transactions/${id}`, {
+    method: "PATCH",
     body: input,
   });
 }

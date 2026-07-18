@@ -50,13 +50,7 @@ export async function api<T>(
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
-    const isLocalFallback = API_URL.includes("localhost");
-    throw new ApiError(
-      0,
-      isLocalFallback
-        ? "ยังไม่ได้ตั้ง NEXT_PUBLIC_API_URL บน Vercel — ให้ใส่ URL ของ Render แล้ว Redeploy"
-        : `เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ (${API_URL}) — อาจเป็น cold start หรือ CORS ไม่ตรง รอ ~1 นาทีแล้วลองใหม่ หรือเปิด /health ของ API ในแท็บใหม่ก่อน`,
-    );
+    throw new ApiError(0, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่อีกครั้ง");
   }
 
   if (response.status === 204) {

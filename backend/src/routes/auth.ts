@@ -80,7 +80,7 @@ export async function authRoutes(app: FastifyInstance) {
     } catch (err) {
       request.log.error(err);
       return reply.code(500).send({
-        error: "สมัครไม่สำเร็จ ตรวจ DATABASE_URL บน Render (แนะนำใช้ Connection pooler + sslmode=require)",
+        error: "สมัครไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
         detail: dbErrorMessage(err),
       });
     }
@@ -134,7 +134,7 @@ export async function authRoutes(app: FastifyInstance) {
     } catch (err) {
       request.log.error(err);
       return reply.code(500).send({
-        error: "เข้าสู่ระบบไม่สำเร็จ ตรวจ DATABASE_URL บน Render",
+        error: "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
         detail: dbErrorMessage(err),
       });
     }

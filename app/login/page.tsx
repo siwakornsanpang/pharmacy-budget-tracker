@@ -200,10 +200,6 @@ export default function LoginPage() {
                   ? "เข้าสู่ระบบ"
                   : "สมัครสมาชิก"}
             </button>
-
-            <p className="text-center text-xs text-fg-subtle">
-              ครั้งแรกหลัง API พัก อาจรอโหลดนาน ~1 นาที
-            </p>
           </form>
         </div>
       </main>

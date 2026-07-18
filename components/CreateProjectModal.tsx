@@ -1,19 +1,23 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { ProjectInput } from "@/lib/api-services";
+import type { Project } from "@/lib/types";
 
 type CreateProjectModalProps = {
   open: boolean;
   onClose: () => void;
-  onCreate: (project: ProjectInput) => Promise<void>;
+  onSave: (project: ProjectInput) => Promise<void>;
+  initial?: Project | null;
 };
 
 export function CreateProjectModal({
   open,
   onClose,
-  onCreate,
+  onSave,
+  initial = null,
 }: CreateProjectModalProps) {
+  const isEdit = Boolean(initial);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [budget, setBudget] = useState("");
@@ -24,6 +28,27 @@ export function CreateProjectModal({
   const [owner, setOwner] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    if (initial) {
+      setName(initial.name);
+      setDescription(initial.description);
+      setBudget(String(initial.budget));
+      setStartDate(initial.startDate);
+      setEndDate(initial.endDate);
+      setOwner(initial.owner);
+      setError("");
+      return;
+    }
+    setName("");
+    setDescription("");
+    setBudget("");
+    setStartDate(new Date().toISOString().slice(0, 10));
+    setEndDate("");
+    setOwner("");
+    setError("");
+  }, [open, initial]);
 
   if (!open) return null;
 
@@ -62,7 +87,7 @@ export function CreateProjectModal({
     setLoading(true);
     setError("");
     try {
-      await onCreate({
+      await onSave({
         name: name.trim(),
         description: description.trim(),
         budget: parsedBudget,
@@ -70,10 +95,16 @@ export function CreateProjectModal({
         endDate,
         owner: owner.trim(),
       });
-      reset();
+      if (!isEdit) reset();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "สร้างโครงการไม่สำเร็จ");
+      setError(
+        err instanceof Error
+          ? err.message
+          : isEdit
+            ? "แก้ไขโครงการไม่สำเร็จ"
+            : "สร้างโครงการไม่สำเร็จ",
+      );
     } finally {
       setLoading(false);
     }
@@ -87,16 +118,18 @@ export function CreateProjectModal({
         aria-label="ปิด"
         onClick={() => {
           if (loading) return;
-          reset();
+          if (!isEdit) reset();
           onClose();
         }}
       />
       <div className="relative z-10 w-full max-w-lg rounded-2xl border border-border bg-surface p-6 shadow-[var(--shadow)]">
         <h2 className="font-[family-name:var(--font-display)] text-xl font-semibold text-fg">
-          New Project
+          {isEdit ? "Edit Project" : "New Project"}
         </h2>
         <p className="mt-1 text-sm text-fg-muted">
-          กรอกข้อมูลพื้นฐานเพื่อเริ่มติดตามงบโครงการ
+          {isEdit
+            ? "อัปเดตข้อมูลโครงการ"
+            : "กรอกข้อมูลพื้นฐานเพื่อเริ่มติดตามงบโครงการ"}
         </p>
 
         <form onSubmit={handleSubmit} className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -165,7 +198,7 @@ export function CreateProjectModal({
               type="button"
               disabled={loading}
               onClick={() => {
-                reset();
+                if (!isEdit) reset();
                 onClose();
               }}
               className="h-10 rounded-lg border border-border px-4 text-sm font-medium text-fg-muted hover:border-accent hover:text-accent disabled:opacity-50"
@@ -177,7 +210,7 @@ export function CreateProjectModal({
               disabled={loading}
               className="h-10 rounded-lg bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
             >
-              {loading ? "Saving..." : "Create Project"}
+              {loading ? "Saving..." : isEdit ? "Save Changes" : "Create Project"}
             </button>
           </div>
         </form>

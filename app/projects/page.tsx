@@ -5,15 +5,18 @@ import { AuthGate } from "@/components/AuthGate";
 import { AppHeader } from "@/components/AppHeader";
 import { ProjectCard, isProjectCompleted } from "@/components/ProjectCard";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
+import { ProjectsPageSkeleton } from "@/components/Skeleton";
 import { ApiError } from "@/lib/api";
 import {
   createProject,
+  deleteProject,
   fetchProjects,
+  updateProject,
   type ProjectInput,
 } from "@/lib/api-services";
 import { formatCurrency } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
-import type { ProjectWithStats } from "@/lib/types";
+import type { Project, ProjectWithStats } from "@/lib/types";
 
 type StatusFilter = "all" | "active" | "completed";
 
@@ -22,12 +25,11 @@ export default function ProjectsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [projects, setProjects] = useState<ProjectWithStats[]>([]);
   const [ready, setReady] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
 
   async function load(status: StatusFilter = statusFilter, q = query) {
-    setLoading(true);
     setError("");
     try {
       const data = await fetchProjects({
@@ -43,8 +45,6 @@ export default function ProjectsPage() {
           : "โหลดโครงการไม่สำเร็จ",
       );
       setReady(true);
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -93,11 +93,37 @@ export default function ProjectsPage() {
     };
   }, [allProjects, projects]);
 
-  async function handleCreate(input: ProjectInput) {
-    await createProject(input);
+  async function refreshLists() {
     await load(statusFilter, query);
     const fresh = await fetchProjects({ status: "all" });
     setAllProjects(fresh);
+  }
+
+  async function handleCreate(input: ProjectInput) {
+    await createProject(input);
+    await refreshLists();
+  }
+
+  async function handleUpdate(input: ProjectInput) {
+    if (!editingProject) return;
+    await updateProject(editingProject.id, input);
+    await refreshLists();
+  }
+
+  async function handleDelete(project: ProjectWithStats) {
+    if (
+      !confirm(
+        `ลบโครงการ "${project.name}" ใช่ไหม? รายการธุรกรรมทั้งหมดในโครงการจะถูกลบด้วย`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteProject(project.id);
+      await refreshLists();
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "ลบโครงการไม่สำเร็จ");
+    }
   }
 
   function exportPortfolio() {
@@ -178,69 +204,15 @@ export default function ProjectsPage() {
                 <button
                   type="button"
                   className="h-10 shrink-0 rounded-lg bg-accent px-4 text-sm font-semibold text-white transition hover:bg-accent-hover"
-                  onClick={() => setShowCreate(true)}
+                  onClick={() => {
+                    setEditingProject(null);
+                    setShowCreate(true);
+                  }}
                 >
                   + New Project
                 </button>
               </div>
             </div>
-
-            {ready ? (
-              <div className="animate-fade-up mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <PortfolioStat
-                  label="Total Budget"
-                  value={formatCurrency(portfolio.budget)}
-                />
-                <PortfolioStat
-                  label="Total Spent"
-                  value={formatCurrency(portfolio.spent)}
-                  accent
-                />
-                <PortfolioStat
-                  label="Remaining"
-                  value={formatCurrency(Math.abs(portfolio.remaining))}
-                  danger={portfolio.remaining < 0}
-                  good={portfolio.remaining >= 0}
-                  sub={
-                    portfolio.remaining < 0 ? "Over budget" : "Still available"
-                  }
-                />
-                <PortfolioStat
-                  label="Projects"
-                  value={`${portfolio.projectCount}`}
-                  sub={
-                    portfolio.overCount > 0 || portfolio.warnCount > 0
-                      ? `Over ${portfolio.overCount} · Watch ${portfolio.warnCount}`
-                      : "All looking good"
-                  }
-                />
-              </div>
-            ) : null}
-
-            {ready ? (
-              <div className="animate-fade-up mb-6 flex flex-wrap items-center gap-2">
-                <span className="mr-1 text-xs font-medium uppercase tracking-wide text-fg-subtle">
-                  Filter
-                </span>
-                {filters.map((f) => (
-                  <button
-                    key={f.key}
-                    type="button"
-                    onClick={() => setStatusFilter(f.key)}
-                    className={`h-9 rounded-lg px-3 text-sm font-medium transition ${
-                      statusFilter === f.key
-                        ? "bg-accent text-white"
-                        : "border border-border bg-surface text-fg-muted hover:border-accent hover:text-accent"
-                    }`}
-                  >
-                    {f.label}
-                    <span className="ml-1.5 tabular-nums opacity-70">
-                      {f.count}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
 
             {error ? (
               <p className="mb-4 rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">
@@ -248,30 +220,95 @@ export default function ProjectsPage() {
               </p>
             ) : null}
 
-            {!ready || loading ? (
-              <div className="flex flex-col items-center justify-center gap-3 py-20">
-                <div className="h-8 w-8 animate-pulse rounded-full bg-accent-soft" />
-                <p className="text-sm text-fg-subtle">
-                  Loading projects... (ครั้งแรกอาจรอนานหน่อย)
-                </p>
-              </div>
-            ) : projects.length === 0 ? (
-              <p className="animate-fade-in py-20 text-center text-fg-muted">
-                ยังไม่มีโครงการ หรือไม่พบตามเงื่อนไขที่เลือก
-              </p>
+            {!ready ? (
+              <ProjectsPageSkeleton />
             ) : (
-              <div className="grid gap-5 sm:grid-cols-2">
-                {projects.map((project, i) => (
-                  <ProjectCard key={project.id} project={project} index={i} />
-                ))}
-              </div>
+              <>
+                <div className="animate-fade-up mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <PortfolioStat
+                    label="Total Budget"
+                    value={formatCurrency(portfolio.budget)}
+                  />
+                  <PortfolioStat
+                    label="Total Spent"
+                    value={formatCurrency(portfolio.spent)}
+                    accent
+                  />
+                  <PortfolioStat
+                    label="Remaining"
+                    value={formatCurrency(Math.abs(portfolio.remaining))}
+                    danger={portfolio.remaining < 0}
+                    good={portfolio.remaining >= 0}
+                    sub={
+                      portfolio.remaining < 0 ? "Over budget" : "Still available"
+                    }
+                  />
+                  <PortfolioStat
+                    label="Projects"
+                    value={`${portfolio.projectCount}`}
+                    sub={
+                      portfolio.overCount > 0 || portfolio.warnCount > 0
+                        ? `Over ${portfolio.overCount} · Watch ${portfolio.warnCount}`
+                        : "All looking good"
+                    }
+                  />
+                </div>
+
+                <div className="animate-fade-up mb-6 flex flex-wrap items-center gap-2">
+                  <span className="mr-1 text-xs font-medium uppercase tracking-wide text-fg-subtle">
+                    Filter
+                  </span>
+                  {filters.map((f) => (
+                    <button
+                      key={f.key}
+                      type="button"
+                      onClick={() => setStatusFilter(f.key)}
+                      className={`h-9 rounded-lg px-3 text-sm font-medium transition ${
+                        statusFilter === f.key
+                          ? "bg-accent text-white"
+                          : "border border-border bg-surface text-fg-muted hover:border-accent hover:text-accent"
+                      }`}
+                    >
+                      {f.label}
+                      <span className="ml-1.5 tabular-nums opacity-70">
+                        {f.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {projects.length === 0 ? (
+                  <p className="animate-fade-in py-20 text-center text-fg-muted">
+                    ยังไม่มีโครงการ หรือไม่พบตามเงื่อนไขที่เลือก
+                  </p>
+                ) : (
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    {projects.map((project, i) => (
+                      <ProjectCard
+                        key={project.id}
+                        project={project}
+                        index={i}
+                        onEdit={(p) => {
+                          setEditingProject(p);
+                          setShowCreate(true);
+                        }}
+                        onDelete={handleDelete}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </main>
 
           <CreateProjectModal
             open={showCreate}
-            onClose={() => setShowCreate(false)}
-            onCreate={handleCreate}
+            initial={editingProject}
+            onClose={() => {
+              setShowCreate(false);
+              setEditingProject(null);
+            }}
+            onSave={editingProject ? handleUpdate : handleCreate}
           />
         </div>
       )}
