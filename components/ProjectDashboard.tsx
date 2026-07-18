@@ -4,19 +4,18 @@ import {
   useEffect,
   useMemo,
   useState,
-  type FormEvent,
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/AuthGate";
 import { AppHeader } from "@/components/AppHeader";
-import { CategorySelect } from "@/components/CategorySelect";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
 import { FinanceCharts } from "@/components/FinanceCharts";
 import { AccountantKpis } from "@/components/AccountantKpis";
 import { BudgetAlerts } from "@/components/BudgetAlerts";
 import { VendorSummary } from "@/components/VendorSummary";
 import { DashboardSkeleton } from "@/components/Skeleton";
+import { TransactionFormModal } from "@/components/TransactionFormModal";
 import { ApiError } from "@/lib/api";
 import {
   createTransaction,
@@ -27,9 +26,9 @@ import {
   updateProject,
   updateTransaction,
   type ProjectInput,
+  type TransactionInput,
 } from "@/lib/api-services";
 import { computeFinanceMetrics } from "@/lib/finance-metrics";
-import { getDefaultCategories } from "@/lib/categories";
 import {
   exportProjectSummaryCsv,
   exportTransactionsCsv,
@@ -55,12 +54,13 @@ function progressTone(percent: number): string {
 
 export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
   const router = useRouter();
-  const defaults = getDefaultCategories();
   const [project, setProject] = useState<Project | null>(null);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showEditProject, setShowEditProject] = useState(false);
+  const [showTxnModal, setShowTxnModal] = useState(false);
+  const [editingTxn, setEditingTxn] = useState<Transaction | null>(null);
 
   async function reload() {
     setLoadError("");
@@ -87,19 +87,6 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
     void reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
-
-  const [showForm, setShowForm] = useState(false);
-  const [editingTxnId, setEditingTxnId] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState(defaults[0] ?? "อื่นๆ");
-  const [transactionDate, setTransactionDate] = useState(
-    new Date().toISOString().slice(0, 10),
-  );
-  const [amount, setAmount] = useState("");
-  const [to, setTo] = useState("");
-  const [note, setNote] = useState("");
-  const [formError, setFormError] = useState("");
-  const [saving, setSaving] = useState(false);
 
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -183,78 +170,32 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
     return map;
   }, [transactions]);
 
-  function resetForm() {
-    setEditingTxnId(null);
-    setTitle("");
-    setCategory(defaults[0] ?? "อื่นๆ");
-    setTransactionDate(new Date().toISOString().slice(0, 10));
-    setAmount("");
-    setTo("");
-    setNote("");
-    setFormError("");
+  function openCreateTransaction() {
+    setEditingTxn(null);
+    setShowTxnModal(true);
   }
 
-  function startEditTransaction(txn: Transaction) {
-    setEditingTxnId(txn.id);
-    setTitle(txn.title);
-    setCategory(txn.category);
-    setTransactionDate(txn.transactionDate);
-    setAmount(String(txn.amount));
-    setTo(txn.to);
-    setNote(txn.note ?? "");
-    setFormError("");
-    setShowForm(true);
+  function openEditTransaction(txn: Transaction) {
+    setEditingTxn(txn);
+    setShowTxnModal(true);
   }
 
-  async function handleSaveTransaction(e: FormEvent) {
-    e.preventDefault();
-    setFormError("");
-
-    const parsedAmount = Number(amount.replace(/,/g, ""));
-    if (!title.trim() || !to.trim() || !transactionDate || !category.trim()) {
-      setFormError("กรุณากรอกข้อมูลให้ครบ");
-      return;
+  async function handleSaveTransaction(input: TransactionInput) {
+    if (editingTxn) {
+      await updateTransaction(editingTxn.id, input);
+    } else {
+      await createTransaction(projectId, input);
     }
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      setFormError("จำนวนเงินต้องมากกว่า 0");
-      return;
-    }
-
-    const payload = {
-      title: title.trim(),
-      category: category.trim(),
-      transactionDate,
-      amount: parsedAmount,
-      to: to.trim(),
-      note: note.trim() || undefined,
-    };
-
-    setSaving(true);
-    try {
-      if (editingTxnId) {
-        await updateTransaction(editingTxnId, payload);
-      } else {
-        await createTransaction(projectId, payload);
-      }
-      await reload();
-      resetForm();
-      setShowForm(false);
-    } catch (err) {
-      setFormError(
-        err instanceof ApiError ? err.message : "บันทึกรายการไม่สำเร็จ",
-      );
-    } finally {
-      setSaving(false);
-    }
+    await reload();
   }
 
   async function handleDelete(id: string) {
     if (!confirm("ลบรายการนี้ใช่ไหม? ตัวเลขงบจะเปลี่ยนตามด้วย")) return;
     try {
       await deleteTransaction(id);
-      if (editingTxnId === id) {
-        resetForm();
-        setShowForm(false);
+      if (editingTxn?.id === id) {
+        setEditingTxn(null);
+        setShowTxnModal(false);
       }
       await reload();
     } catch (err) {
@@ -534,108 +475,12 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                 </h3>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (showForm) {
-                      resetForm();
-                      setShowForm(false);
-                    } else {
-                      resetForm();
-                      setShowForm(true);
-                    }
-                  }}
+                  onClick={openCreateTransaction}
                   className="h-10 rounded-lg bg-accent px-4 text-sm font-semibold text-white transition hover:bg-accent-hover"
                 >
-                  {showForm ? "Close" : "+ Add Transaction"}
+                  + Add Transaction
                 </button>
               </div>
-
-              {showForm ? (
-                <form
-                  onSubmit={handleSaveTransaction}
-                  className="mb-6 grid gap-4 rounded-2xl border border-border bg-surface p-6 shadow-[var(--shadow)] sm:grid-cols-2 lg:grid-cols-3"
-                >
-                  <p className="text-sm font-medium text-fg sm:col-span-2 lg:col-span-3">
-                    {editingTxnId ? "แก้ไขรายการ" : "เพิ่มรายการใหม่"}
-                  </p>
-                  <Field label="Title">
-                    <input
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="เช่น ค่าจ้างออกแบบ, ค่าอุปกรณ์"
-                      className="input"
-                    />
-                  </Field>
-                  <Field label="Category">
-                    <CategorySelect value={category} onChange={setCategory} />
-                  </Field>
-                  <Field label="Date">
-                    <input
-                      type="date"
-                      value={transactionDate}
-                      onChange={(e) => setTransactionDate(e.target.value)}
-                      className="input"
-                    />
-                  </Field>
-                  <Field label="Amount (THB)">
-                    <input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="0.00"
-                      className="input"
-                    />
-                  </Field>
-                  <Field label="Paid To">
-                    <input
-                      value={to}
-                      onChange={(e) => setTo(e.target.value)}
-                      placeholder="ชื่อคน / ร้านค้า / บริษัท"
-                      className="input"
-                    />
-                  </Field>
-                  <Field label="Note (optional)">
-                    <input
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      placeholder="เช่น เลขใบเสร็จ, รายละเอียดเพิ่มเติม"
-                      className="input"
-                    />
-                  </Field>
-                  <div className="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-3">
-                    <button
-                      type="submit"
-                      disabled={saving}
-                      className="h-11 rounded-lg bg-accent px-6 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:opacity-60"
-                    >
-                      {saving
-                        ? "Saving..."
-                        : editingTxnId
-                          ? "Save Changes"
-                          : "Save"}
-                    </button>
-                    {editingTxnId ? (
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() => {
-                          resetForm();
-                          setShowForm(false);
-                        }}
-                        className="h-11 rounded-lg border border-border px-4 text-sm font-medium text-fg-muted hover:border-accent hover:text-accent disabled:opacity-60"
-                      >
-                        Cancel Edit
-                      </button>
-                    ) : null}
-                  </div>
-                  {formError ? (
-                    <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger sm:col-span-2 lg:col-span-3">
-                      {formError}
-                    </p>
-                  ) : null}
-                </form>
-              ) : null}
 
               {/* Filters */}
               <div className="mb-4 grid gap-3 rounded-2xl border border-border bg-surface p-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -782,7 +627,7 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                             <div className="flex items-center justify-end gap-3">
                               <button
                                 type="button"
-                                onClick={() => startEditTransaction(txn)}
+                                onClick={() => openEditTransaction(txn)}
                                 className="text-xs text-fg-subtle hover:text-accent"
                               >
                                 แก้ไข
@@ -827,6 +672,16 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
             onClose={() => setShowEditProject(false)}
             onSave={handleUpdateProject}
           />
+
+          <TransactionFormModal
+            open={showTxnModal}
+            initial={editingTxn}
+            onClose={() => {
+              setShowTxnModal(false);
+              setEditingTxn(null);
+            }}
+            onSave={handleSaveTransaction}
+          />
         </div>
       )}
     </AuthGate>
@@ -865,21 +720,6 @@ function StatBlock({
         {value}
       </p>
     </div>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-fg-muted">{label}</span>
-      {children}
-    </label>
   );
 }
 
