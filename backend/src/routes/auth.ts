@@ -17,6 +17,13 @@ const credentialsSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
 });
 
+function dbErrorMessage(err: unknown): string {
+  if (err && typeof err === "object" && "message" in err) {
+    return String((err as { message: string }).message);
+  }
+  return "Database error";
+}
+
 export async function authRoutes(app: FastifyInstance) {
   app.post("/auth/register", async (request, reply) => {
     const parsed = credentialsSchema.safeParse(request.body);
@@ -28,46 +35,55 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const { username, password, name } = parsed.data;
-    const existing = await db.query.users.findFirst({
-      where: eq(users.username, username.toLowerCase()),
-    });
 
-    if (existing) {
-      return reply.code(409).send({ error: "Username นี้ถูกใช้แล้ว" });
-    }
+    try {
+      const existing = await db.query.users.findFirst({
+        where: eq(users.username, username.toLowerCase()),
+      });
 
-    const passwordHash = await hashPassword(password);
-    const displayName = name?.trim() || username;
+      if (existing) {
+        return reply.code(409).send({ error: "Username นี้ถูกใช้แล้ว" });
+      }
 
-    const [user] = await db
-      .insert(users)
-      .values({
-        username: username.toLowerCase(),
-        passwordHash,
-        name: displayName,
-      })
-      .returning();
+      const passwordHash = await hashPassword(password);
+      const displayName = name?.trim() || username;
 
-    await db.insert(categories).values(
-      DEFAULT_CATEGORIES.map((cat) => ({
-        userId: user.id,
-        name: cat,
-      })),
-    );
+      const [user] = await db
+        .insert(users)
+        .values({
+          username: username.toLowerCase(),
+          passwordHash,
+          name: displayName,
+        })
+        .returning();
 
-    const token = app.jwt.sign({
-      sub: user.id,
-      username: user.username,
-    });
+      await db.insert(categories).values(
+        DEFAULT_CATEGORIES.map((cat) => ({
+          userId: user.id,
+          name: cat,
+        })),
+      );
 
-    return reply.code(201).send({
-      token,
-      user: {
-        id: user.id,
+      const token = app.jwt.sign({
+        sub: user.id,
         username: user.username,
-        name: user.name,
-      },
-    });
+      });
+
+      return reply.code(201).send({
+        token,
+        user: {
+          id: user.id,
+          username: user.username,
+          name: user.name,
+        },
+      });
+    } catch (err) {
+      request.log.error(err);
+      return reply.code(500).send({
+        error: "สมัครไม่สำเร็จ ตรวจ DATABASE_URL บน Render (แนะนำใช้ Connection pooler + sslmode=require)",
+        detail: dbErrorMessage(err),
+      });
+    }
   });
 
   app.post("/auth/login", async (request, reply) => {
@@ -83,32 +99,45 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const username = parsed.data.username.toLowerCase();
-    const user = await db.query.users.findFirst({
-      where: eq(users.username, username),
-    });
 
-    if (!user) {
-      return reply.code(401).send({ error: "Username หรือ Password ไม่ถูกต้อง" });
-    }
+    try {
+      const user = await db.query.users.findFirst({
+        where: eq(users.username, username),
+      });
 
-    const ok = await verifyPassword(parsed.data.password, user.passwordHash);
-    if (!ok) {
-      return reply.code(401).send({ error: "Username หรือ Password ไม่ถูกต้อง" });
-    }
+      if (!user) {
+        return reply
+          .code(401)
+          .send({ error: "Username หรือ Password ไม่ถูกต้อง" });
+      }
 
-    const token = app.jwt.sign({
-      sub: user.id,
-      username: user.username,
-    });
+      const ok = await verifyPassword(parsed.data.password, user.passwordHash);
+      if (!ok) {
+        return reply
+          .code(401)
+          .send({ error: "Username หรือ Password ไม่ถูกต้อง" });
+      }
 
-    return {
-      token,
-      user: {
-        id: user.id,
+      const token = app.jwt.sign({
+        sub: user.id,
         username: user.username,
-        name: user.name,
-      },
-    };
+      });
+
+      return {
+        token,
+        user: {
+          id: user.id,
+          username: user.username,
+          name: user.name,
+        },
+      };
+    } catch (err) {
+      request.log.error(err);
+      return reply.code(500).send({
+        error: "เข้าสู่ระบบไม่สำเร็จ ตรวจ DATABASE_URL บน Render",
+        detail: dbErrorMessage(err),
+      });
+    }
   });
 
   app.get(
