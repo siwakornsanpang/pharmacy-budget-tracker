@@ -12,7 +12,6 @@ import { AppHeader } from "@/components/AppHeader";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
 import { FinanceCharts } from "@/components/FinanceCharts";
 import { AccountantKpis } from "@/components/AccountantKpis";
-import { BudgetAlerts } from "@/components/BudgetAlerts";
 import { VendorSummary } from "@/components/VendorSummary";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { TransactionFormModal } from "@/components/TransactionFormModal";
@@ -375,25 +374,19 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                   >
                     Print
                   </button>
-                  <span
-                    className={`rounded-lg px-3 py-1.5 text-sm font-semibold tabular-nums ${
-                      metrics.percentUsed >= 90
-                        ? "bg-danger-soft text-danger"
-                        : "bg-accent-soft text-accent"
-                    }`}
+                  <button
+                    type="button"
+                    onClick={openCreateTransaction}
+                    className="h-9 rounded-lg bg-accent px-3 text-sm font-semibold text-white transition hover:bg-accent-hover"
                   >
-                    ใช้ไป {metrics.percentUsed}%
-                  </span>
+                    + Add Transaction
+                  </button>
                 </div>
               </div>
 
               <p className="mb-4 max-w-2xl text-sm leading-relaxed text-fg-muted">
                 {project.description}
               </p>
-
-              <div className="mb-5">
-                <BudgetAlerts metrics={metrics} />
-              </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
                 <StatBlock
