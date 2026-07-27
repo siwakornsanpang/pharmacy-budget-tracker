@@ -288,11 +288,17 @@ export default function ProjectsPage() {
                         key={project.id}
                         project={project}
                         index={i}
-                        onEdit={(p) => {
-                          setEditingProject(p);
-                          setShowCreate(true);
-                        }}
-                        onDelete={handleDelete}
+                        onEdit={
+                          project.isCreator || project.role === "admin"
+                            ? (p) => {
+                                setEditingProject(p);
+                                setShowCreate(true);
+                              }
+                            : undefined
+                        }
+                        onDelete={
+                          project.isCreator ? handleDelete : undefined
+                        }
                       />
                     ))}
                   </div>

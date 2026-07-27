@@ -1,5 +1,12 @@
 import { api } from "@/lib/api";
-import type { Project, ProjectWithStats, Transaction } from "@/lib/types";
+import type {
+  MemberRole,
+  Project,
+  ProjectMember,
+  ProjectPerson,
+  ProjectWithStats,
+  Transaction,
+} from "@/lib/types";
 
 export type AuthResponse = {
   token: string;
@@ -25,6 +32,12 @@ export type TransactionInput = {
   transactionDate: string;
   amount: number;
   to: string;
+  note?: string;
+};
+
+export type PersonInput = {
+  name: string;
+  roleTitle: string;
   note?: string;
 };
 
@@ -109,6 +122,78 @@ export async function updateTransaction(
 
 export async function deleteTransaction(id: string): Promise<void> {
   await api<void>(`/transactions/${id}`, { method: "DELETE" });
+}
+
+export async function fetchMembers(
+  projectId: string,
+): Promise<ProjectMember[]> {
+  return api<ProjectMember[]>(`/projects/${projectId}/members`);
+}
+
+export async function addMember(
+  projectId: string,
+  input: { username: string; role: MemberRole },
+): Promise<ProjectMember> {
+  return api<ProjectMember>(`/projects/${projectId}/members`, {
+    method: "POST",
+    body: input,
+  });
+}
+
+export async function updateMemberRole(
+  projectId: string,
+  userId: string,
+  role: MemberRole,
+): Promise<ProjectMember> {
+  return api<ProjectMember>(`/projects/${projectId}/members/${userId}`, {
+    method: "PATCH",
+    body: { role },
+  });
+}
+
+export async function removeMember(
+  projectId: string,
+  userId: string,
+): Promise<void> {
+  await api<void>(`/projects/${projectId}/members/${userId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchPeople(
+  projectId: string,
+): Promise<ProjectPerson[]> {
+  return api<ProjectPerson[]>(`/projects/${projectId}/people`);
+}
+
+export async function createPerson(
+  projectId: string,
+  input: PersonInput,
+): Promise<ProjectPerson> {
+  return api<ProjectPerson>(`/projects/${projectId}/people`, {
+    method: "POST",
+    body: input,
+  });
+}
+
+export async function updatePerson(
+  projectId: string,
+  personId: string,
+  input: Partial<PersonInput>,
+): Promise<ProjectPerson> {
+  return api<ProjectPerson>(`/projects/${projectId}/people/${personId}`, {
+    method: "PATCH",
+    body: input,
+  });
+}
+
+export async function deletePerson(
+  projectId: string,
+  personId: string,
+): Promise<void> {
+  await api<void>(`/projects/${projectId}/people/${personId}`, {
+    method: "DELETE",
+  });
 }
 
 export async function fetchCategories(): Promise<{ id: string; name: string }[]> {

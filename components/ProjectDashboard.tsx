@@ -15,6 +15,8 @@ import { AccountantKpis } from "@/components/AccountantKpis";
 import { VendorSummary } from "@/components/VendorSummary";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { TransactionFormModal } from "@/components/TransactionFormModal";
+import { ProjectMembersPanel } from "@/components/ProjectMembersPanel";
+import { ProjectPeoplePanel } from "@/components/ProjectPeoplePanel";
 import { ApiError } from "@/lib/api";
 import {
   createTransaction,
@@ -37,7 +39,7 @@ import {
   formatCurrencyPrecise,
   formatDate,
 } from "@/lib/format";
-import type { Project, Transaction } from "@/lib/types";
+import type { ProjectWithStats, Transaction } from "@/lib/types";
 
 type ProjectDashboardProps = {
   projectId: string;
@@ -53,7 +55,7 @@ function progressTone(percent: number): string {
 
 export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
   const router = useRouter();
-  const [project, setProject] = useState<Project | null>(null);
+  const [project, setProject] = useState<ProjectWithStats | null>(null);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -314,20 +316,24 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                   </h2>
                 </div>
                 <div className="flex flex-wrap gap-2 print:hidden">
-                  <button
-                    type="button"
-                    onClick={() => setShowEditProject(true)}
-                    className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-fg-muted transition hover:border-accent hover:text-accent"
-                  >
-                    Edit Project
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleDeleteProject()}
-                    className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-fg-muted transition hover:border-danger hover:text-danger"
-                  >
-                    Delete
-                  </button>
+                  {project.canEditProject ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowEditProject(true)}
+                      className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-fg-muted transition hover:border-accent hover:text-accent"
+                    >
+                      Edit Project
+                    </button>
+                  ) : null}
+                  {project.canDeleteProject ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteProject()}
+                      className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-fg-muted transition hover:border-danger hover:text-danger"
+                    >
+                      Delete
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() =>
@@ -374,13 +380,15 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                   >
                     Print
                   </button>
-                  <button
-                    type="button"
-                    onClick={openCreateTransaction}
-                    className="h-9 rounded-lg bg-accent px-3 text-sm font-semibold text-white transition hover:bg-accent-hover"
-                  >
-                    + Add Transaction
-                  </button>
+                  {project.canEditTransactions ? (
+                    <button
+                      type="button"
+                      onClick={openCreateTransaction}
+                      className="h-9 rounded-lg bg-accent px-3 text-sm font-semibold text-white transition hover:bg-accent-hover"
+                    >
+                      + Add Transaction
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
@@ -457,6 +465,20 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
               <VendorSummary transactions={transactions} />
             </section>
 
+            <section
+              className="animate-fade-up mb-8 grid gap-5 print:hidden lg:grid-cols-2"
+              style={{ animationDelay: "90ms" }}
+            >
+              <ProjectMembersPanel
+                projectId={projectId}
+                canManage={Boolean(project.canManageMembers)}
+              />
+              <ProjectPeoplePanel
+                projectId={projectId}
+                canManage={Boolean(project.canManagePeople)}
+              />
+            </section>
+
             {/* Transactions */}
             <section
               className="animate-fade-up mb-6 print:hidden"
@@ -466,13 +488,15 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                 <h3 className="text-lg font-semibold text-fg">
                   Transactions
                 </h3>
-                <button
-                  type="button"
-                  onClick={openCreateTransaction}
-                  className="h-10 rounded-lg bg-accent px-4 text-sm font-semibold text-white transition hover:bg-accent-hover"
-                >
-                  + Add Transaction
-                </button>
+                {project.canEditTransactions ? (
+                  <button
+                    type="button"
+                    onClick={openCreateTransaction}
+                    className="h-10 rounded-lg bg-accent px-4 text-sm font-semibold text-white transition hover:bg-accent-hover"
+                  >
+                    + Add Transaction
+                  </button>
+                ) : null}
               </div>
 
               {/* Filters */}
@@ -617,22 +641,24 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                             )}
                           </td>
                           <td className="px-4 py-3 text-right print:hidden">
-                            <div className="flex items-center justify-end gap-3">
-                              <button
-                                type="button"
-                                onClick={() => openEditTransaction(txn)}
-                                className="text-xs text-fg-subtle hover:text-accent"
-                              >
-                                แก้ไข
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(txn.id)}
-                                className="text-xs text-fg-subtle hover:text-danger"
-                              >
-                                ลบ
-                              </button>
-                            </div>
+                            {project.canEditTransactions ? (
+                              <div className="flex items-center justify-end gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditTransaction(txn)}
+                                  className="text-xs text-fg-subtle hover:text-accent"
+                                >
+                                  แก้ไข
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(txn.id)}
+                                  className="text-xs text-fg-subtle hover:text-danger"
+                                >
+                                  ลบ
+                                </button>
+                              </div>
+                            ) : null}
                           </td>
                         </tr>
                       ))

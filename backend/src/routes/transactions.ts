@@ -2,7 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { projects, transactions } from "../db/schema.js";
+import { transactions } from "../db/schema.js";
+import { getProjectAccess } from "../lib/access.js";
 import { serializeTransaction } from "../lib/serialize.js";
 
 const transactionSchema = z.object({
@@ -14,19 +15,13 @@ const transactionSchema = z.object({
   note: z.string().trim().max(2000).optional(),
 });
 
-async function ownedProject(userId: string, projectId: string) {
-  return db.query.projects.findFirst({
-    where: and(eq(projects.id, projectId), eq(projects.userId, userId)),
-  });
-}
-
 export async function transactionRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
 
   app.get("/projects/:projectId/transactions", async (request, reply) => {
     const { projectId } = request.params as { projectId: string };
-    const project = await ownedProject(request.user.sub, projectId);
-    if (!project) {
+    const access = await getProjectAccess(request.user.sub, projectId);
+    if (!access) {
       return reply.code(404).send({ error: "Project not found" });
     }
 
@@ -87,9 +82,12 @@ export async function transactionRoutes(app: FastifyInstance) {
 
   app.post("/projects/:projectId/transactions", async (request, reply) => {
     const { projectId } = request.params as { projectId: string };
-    const project = await ownedProject(request.user.sub, projectId);
-    if (!project) {
+    const access = await getProjectAccess(request.user.sub, projectId);
+    if (!access) {
       return reply.code(404).send({ error: "Project not found" });
+    }
+    if (!access.canEditTransactions) {
+      return reply.code(403).send({ error: "ไม่มีสิทธิ์เพิ่มรายการ" });
     }
 
     const parsed = transactionSchema.safeParse(request.body);
@@ -125,9 +123,15 @@ export async function transactionRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Transaction not found" });
     }
 
-    const project = await ownedProject(request.user.sub, existing.projectId);
-    if (!project) {
+    const access = await getProjectAccess(
+      request.user.sub,
+      existing.projectId,
+    );
+    if (!access) {
       return reply.code(404).send({ error: "Transaction not found" });
+    }
+    if (!access.canEditTransactions) {
+      return reply.code(403).send({ error: "ไม่มีสิทธิ์แก้ไขรายการ" });
     }
 
     const parsed = transactionSchema.partial().safeParse(request.body);
@@ -170,9 +174,15 @@ export async function transactionRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Transaction not found" });
     }
 
-    const project = await ownedProject(request.user.sub, existing.projectId);
-    if (!project) {
+    const access = await getProjectAccess(
+      request.user.sub,
+      existing.projectId,
+    );
+    if (!access) {
       return reply.code(404).send({ error: "Transaction not found" });
+    }
+    if (!access.canEditTransactions) {
+      return reply.code(403).send({ error: "ไม่มีสิทธิ์ลบรายการ" });
     }
 
     await db.delete(transactions).where(eq(transactions.id, id));

@@ -5,6 +5,8 @@ import { authRoutes } from "./routes/auth.js";
 import { projectRoutes } from "./routes/projects.js";
 import { transactionRoutes } from "./routes/transactions.js";
 import { categoryRoutes } from "./routes/categories.js";
+import { memberRoutes } from "./routes/members.js";
+import { peopleRoutes } from "./routes/people.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -36,6 +38,8 @@ export async function buildApp() {
   await app.register(projectRoutes);
   await app.register(transactionRoutes);
   await app.register(categoryRoutes);
+  await app.register(memberRoutes);
+  await app.register(peopleRoutes);
 
   return app;
 }
