@@ -68,6 +68,7 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
   const [showEditProject, setShowEditProject] = useState(false);
   const [showTxnModal, setShowTxnModal] = useState(false);
   const [editingTxn, setEditingTxn] = useState<Transaction | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [txnDefaultKind, setTxnDefaultKind] =
     useState<TransactionKind>("general");
   const [kindFilter, setKindFilter] = useState<"all" | TransactionKind>("all");
@@ -597,10 +598,9 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
               style={{ animationDelay: "140ms" }}
             >
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[860px] text-left text-sm">
+                <table className="w-full min-w-[720px] text-left text-sm">
                   <thead>
                     <tr className="border-b border-border bg-bg-elevated text-xs uppercase tracking-wide text-fg-subtle">
-                      <th className="px-4 py-3 font-medium">Ref</th>
                       <th className="px-4 py-3 font-medium">
                         <SortBtn
                           active={sortKey === "date"}
@@ -616,16 +616,7 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                           asc={sortAsc}
                           onClick={() => toggleSort("title")}
                         >
-                          Title
-                        </SortBtn>
-                      </th>
-                      <th className="px-4 py-3 font-medium">
-                        <SortBtn
-                          active={sortKey === "category"}
-                          asc={sortAsc}
-                          onClick={() => toggleSort("category")}
-                        >
-                          Category
+                          Detail
                         </SortBtn>
                       </th>
                       <th className="px-4 py-3 font-medium">Paid To</th>
@@ -642,105 +633,106 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                       <th className="px-4 py-3 text-right font-medium">
                         Running
                       </th>
-                      <th className="px-4 py-3 font-medium print:hidden"> </th>
+                      <th className="px-4 py-3 text-right font-medium print:hidden">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={8}
+                          colSpan={6}
                           className="px-5 py-12 text-center text-fg-muted"
                         >
                           ไม่พบรายการตามเงื่อนไขที่กรอง
                         </td>
                       </tr>
                     ) : (
-                      filtered.map((txn) => (
-                        <tr
-                          key={txn.id}
-                          className="border-b border-border/70 last:border-0 transition hover:bg-accent-soft/30"
-                        >
-                          <td className="px-4 py-3 font-mono text-xs text-fg-subtle">
-                            {txn.id}
-                          </td>
-                          <td className="px-4 py-3 tabular-nums text-fg-muted">
-                            {formatDate(txn.transactionDate)}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="font-medium text-fg">{txn.title}</div>
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                              <span
-                                className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
-                                  (txn.kind ?? "general") === "salary"
-                                    ? "bg-accent-soft text-accent"
-                                    : "bg-bg text-fg-muted"
-                                }`}
-                              >
-                                {(txn.kind ?? "general") === "salary"
-                                  ? "ค่าแรง"
-                                  : "ทั่วไป"}
-                              </span>
-                              {txn.receiptUrl ? (
-                                <a
-                                  href={txn.receiptUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="rounded-md bg-bg px-1.5 py-0.5 text-[10px] font-semibold text-accent hover:underline"
-                                >
-                                  ใบเสร็จ
-                                </a>
-                              ) : null}
-                              {txn.note ? (
-                                <span className="text-xs text-fg-subtle">
-                                  {txn.note}
+                      filtered.map((txn) => {
+                        const isSalary = (txn.kind ?? "general") === "salary";
+                        return (
+                          <tr
+                            key={txn.id}
+                            className="border-b border-border/70 last:border-0 transition hover:bg-accent-soft/30"
+                          >
+                            <td className="whitespace-nowrap px-4 py-3.5 tabular-nums text-fg-muted">
+                              {formatDate(txn.transactionDate)}
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium text-fg">
+                                  {txn.title}
                                 </span>
-                              ) : null}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="rounded-md bg-bg px-2 py-0.5 text-xs text-fg-muted">
-                              {txn.category}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-fg-muted">{txn.to}</td>
-                          <td className="px-4 py-3 text-right font-semibold tabular-nums text-fg">
-                            {formatCurrencyPrecise(txn.amount)}
-                          </td>
-                          <td className="px-4 py-3 text-right tabular-nums text-fg-muted">
-                            {formatCurrency(
-                              runningById.get(txn.id) ?? txn.amount,
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-right print:hidden">
-                            {project.canEditTransactions ? (
-                              <div className="flex items-center justify-end gap-3">
-                                <button
-                                  type="button"
-                                  onClick={() => openEditTransaction(txn)}
-                                  className="text-xs text-fg-subtle hover:text-accent"
+                                <span
+                                  className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                                    isSalary
+                                      ? "bg-accent-soft text-accent"
+                                      : "bg-bg text-fg-muted"
+                                  }`}
                                 >
-                                  แก้ไข
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDelete(txn.id)}
-                                  className="text-xs text-fg-subtle hover:text-danger"
-                                >
-                                  ลบ
-                                </button>
+                                  {isSalary ? "ค่าแรง" : "ทั่วไป"}
+                                </span>
                               </div>
-                            ) : null}
-                          </td>
-                        </tr>
-                      ))
+                              <p className="mt-1 text-xs text-fg-subtle">
+                                {txn.category}
+                                {txn.note ? ` · ${txn.note}` : ""}
+                              </p>
+                            </td>
+                            <td className="px-4 py-3.5 text-fg-muted">
+                              {txn.to}
+                            </td>
+                            <td className="px-4 py-3.5 text-right font-semibold tabular-nums text-fg">
+                              {formatCurrencyPrecise(txn.amount)}
+                            </td>
+                            <td className="px-4 py-3.5 text-right tabular-nums text-fg-muted">
+                              {formatCurrency(
+                                runningById.get(txn.id) ?? txn.amount,
+                              )}
+                            </td>
+                            <td className="px-4 py-3.5 print:hidden">
+                              <div className="flex flex-wrap items-center justify-end gap-2">
+                                {txn.receiptUrl ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setReceiptPreview(txn.receiptUrl!)
+                                    }
+                                    className="inline-flex h-9 items-center rounded-lg border border-accent bg-accent-soft px-3 text-xs font-semibold text-accent transition hover:bg-accent hover:text-white"
+                                  >
+                                    ดูใบเสร็จ
+                                  </button>
+                                ) : null}
+                                {project.canEditTransactions ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => openEditTransaction(txn)}
+                                      className="inline-flex h-9 items-center rounded-lg border border-border px-3 text-xs font-medium text-fg-muted transition hover:border-accent hover:text-accent"
+                                    >
+                                      แก้ไข
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDelete(txn.id)}
+                                      className="inline-flex h-9 items-center rounded-lg border border-border px-3 text-xs font-medium text-fg-muted transition hover:border-danger hover:text-danger"
+                                    >
+                                      ลบ
+                                    </button>
+                                  </>
+                                ) : null}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                   {filtered.length > 0 ? (
                     <tfoot>
                       <tr className="border-t border-border bg-bg-elevated">
                         <td
-                          colSpan={5}
+                          colSpan={3}
                           className="px-4 py-3 text-xs font-medium uppercase text-fg-subtle"
                         >
                           รวมตาม Filter
@@ -756,6 +748,55 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
               </div>
             </section>
           </main>
+
+          {receiptPreview ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <button
+                type="button"
+                className="absolute inset-0 bg-[#2a2a14]/50 backdrop-blur-[2px]"
+                aria-label="ปิด"
+                onClick={() => setReceiptPreview(null)}
+              />
+              <div className="relative z-10 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow)]">
+                <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                  <h3 className="text-sm font-semibold text-fg">ใบเสร็จ</h3>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={receiptPreview}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-fg-muted hover:border-accent hover:text-accent"
+                    >
+                      เปิดแท็บใหม่
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setReceiptPreview(null)}
+                      className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover"
+                    >
+                      ปิด
+                    </button>
+                  </div>
+                </div>
+                <div className="flex min-h-[280px] flex-1 items-center justify-center overflow-auto bg-bg p-4">
+                  {/\.pdf($|\?)/i.test(receiptPreview) ? (
+                    <iframe
+                      title="receipt"
+                      src={receiptPreview}
+                      className="h-[70vh] w-full rounded-lg border border-border bg-white"
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={receiptPreview}
+                      alt="ใบเสร็จ"
+                      className="max-h-[70vh] max-w-full rounded-lg object-contain"
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <CreateProjectModal
             open={showEditProject}
