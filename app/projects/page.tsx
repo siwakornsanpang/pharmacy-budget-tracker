@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { AuthGate } from "@/components/AuthGate";
 import { AppHeader } from "@/components/AppHeader";
-import { ProjectCard, isProjectCompleted } from "@/components/ProjectCard";
+import {
+  ProjectCard,
+  resolveProjectStatus,
+} from "@/components/ProjectCard";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
 import { ProjectsPageSkeleton } from "@/components/Skeleton";
 import { ApiError } from "@/lib/api";
@@ -16,9 +19,9 @@ import {
 } from "@/lib/api-services";
 import { formatCurrency } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
-import type { Project, ProjectWithStats } from "@/lib/types";
+import type { Project, ProjectStatus, ProjectWithStats } from "@/lib/types";
 
-type StatusFilter = "all" | "active" | "completed";
+type StatusFilter = "all" | ProjectStatus;
 
 export default function ProjectsPage() {
   const [query, setQuery] = useState("");
@@ -78,9 +81,15 @@ export default function ProjectsPage() {
     const warnCount = source.filter(
       (p) => p.percentUsed >= 70 && p.spent <= p.budget,
     ).length;
-    const completed = source.filter((p) =>
-      p.status ? p.status === "completed" : isProjectCompleted(p.endDate),
-    ).length;
+    let active = 0;
+    let paused = 0;
+    let completed = 0;
+    for (const p of source) {
+      const status = resolveProjectStatus(p);
+      if (status === "completed") completed += 1;
+      else if (status === "paused") paused += 1;
+      else active += 1;
+    }
     return {
       budget,
       spent,
@@ -88,7 +97,8 @@ export default function ProjectsPage() {
       projectCount: source.length,
       overCount,
       warnCount,
-      active: source.length - completed,
+      active,
+      paused,
       completed,
     };
   }, [allProjects, projects]);
@@ -150,8 +160,7 @@ export default function ProjectsPage() {
         p.percentUsed,
         p.startDate,
         p.endDate ?? "",
-        p.status ??
-          (isProjectCompleted(p.endDate) ? "Completed" : "Active"),
+        resolveProjectStatus(p),
       ]),
     );
   }
@@ -159,6 +168,7 @@ export default function ProjectsPage() {
   const filters: { key: StatusFilter; label: string; count: number }[] = [
     { key: "all", label: "All", count: portfolio.projectCount },
     { key: "active", label: "Active", count: portfolio.active },
+    { key: "paused", label: "On Hold", count: portfolio.paused },
     { key: "completed", label: "Completed", count: portfolio.completed },
   ];
 

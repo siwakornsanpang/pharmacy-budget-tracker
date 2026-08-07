@@ -3,8 +3,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ProjectMembersPanel } from "@/components/ProjectMembersPanel";
 import { ProjectPeoplePanel } from "@/components/ProjectPeoplePanel";
+import { ProjectStatusField } from "@/components/ProjectStatusField";
 import type { ProjectInput } from "@/lib/api-services";
-import type { ProjectWithStats } from "@/lib/types";
+import type { ProjectStatus, ProjectWithStats } from "@/lib/types";
 
 type ProjectSettingsPanelProps = {
   project: ProjectWithStats;
@@ -26,6 +27,11 @@ export function ProjectSettingsPanel({
   const [endDate, setEndDate] = useState(project.endDate ?? "");
   const [unknownEnd, setUnknownEnd] = useState(!project.endDate);
   const [owner, setOwner] = useState(project.owner);
+  const [status, setStatus] = useState<ProjectStatus>(
+    project.status === "paused" || project.status === "completed"
+      ? project.status
+      : "active",
+  );
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
@@ -35,6 +41,8 @@ export function ProjectSettingsPanel({
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
+  const canEdit = project.canEditProject !== false;
+
   useEffect(() => {
     setName(project.name);
     setDescription(project.description);
@@ -43,13 +51,27 @@ export function ProjectSettingsPanel({
     setEndDate(project.endDate ?? "");
     setUnknownEnd(!project.endDate);
     setOwner(project.owner);
+    setStatus(
+      project.status === "paused" || project.status === "completed"
+        ? project.status
+        : "active",
+    );
     setError("");
     setSavedOk(false);
-  }, [project]);
+  }, [
+    project.id,
+    project.name,
+    project.description,
+    project.budget,
+    project.startDate,
+    project.endDate,
+    project.owner,
+    project.status,
+  ]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!project.canEditProject) return;
+    if (!canEdit) return;
 
     const parsedBudget = Number(budget.replace(/,/g, ""));
     if (!name.trim() || !description.trim() || !owner.trim() || !startDate) {
@@ -80,6 +102,7 @@ export function ProjectSettingsPanel({
         startDate,
         endDate: unknownEnd ? null : endDate,
         owner: owner.trim(),
+        status,
       });
       setSavedOk(true);
     } catch (err) {
@@ -120,7 +143,7 @@ export function ProjectSettingsPanel({
             <span className="text-xs font-medium text-fg-muted">Project Name</span>
             <input
               value={name}
-              disabled={!project.canEditProject}
+              disabled={!canEdit}
               onChange={(e) => setName(e.target.value)}
               className={inputClass}
             />
@@ -129,7 +152,7 @@ export function ProjectSettingsPanel({
             <span className="text-xs font-medium text-fg-muted">Description</span>
             <textarea
               value={description}
-              disabled={!project.canEditProject}
+              disabled={!canEdit}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
               className="rounded-lg border border-border bg-bg-elevated px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft disabled:cursor-not-allowed disabled:opacity-60"
@@ -141,7 +164,7 @@ export function ProjectSettingsPanel({
               type="number"
               min="1"
               value={budget}
-              disabled={!project.canEditProject}
+              disabled={!canEdit}
               onChange={(e) => setBudget(e.target.value)}
               className={inputClass}
             />
@@ -150,7 +173,7 @@ export function ProjectSettingsPanel({
             <span className="text-xs font-medium text-fg-muted">Owner</span>
             <input
               value={owner}
-              disabled={!project.canEditProject}
+              disabled={!canEdit}
               onChange={(e) => setOwner(e.target.value)}
               className={inputClass}
             />
@@ -160,7 +183,7 @@ export function ProjectSettingsPanel({
             <input
               type="date"
               value={startDate}
-              disabled={!project.canEditProject}
+              disabled={!canEdit}
               onChange={(e) => setStartDate(e.target.value)}
               className={inputClass}
             />
@@ -170,7 +193,7 @@ export function ProjectSettingsPanel({
             <input
               type="date"
               value={endDate}
-              disabled={!project.canEditProject || unknownEnd}
+              disabled={!canEdit || unknownEnd}
               onChange={(e) => setEndDate(e.target.value)}
               className={inputClass}
             />
@@ -179,7 +202,7 @@ export function ProjectSettingsPanel({
             <input
               type="checkbox"
               checked={unknownEnd}
-              disabled={!project.canEditProject}
+              disabled={!canEdit}
               onChange={(e) => {
                 setUnknownEnd(e.target.checked);
                 if (e.target.checked) setEndDate("");
@@ -190,6 +213,12 @@ export function ProjectSettingsPanel({
               ไม่ระบุวันจบ / ยังไม่รู้วันจบ
             </span>
           </label>
+
+          <ProjectStatusField
+            value={status}
+            onChange={setStatus}
+            disabled={!canEdit}
+          />
 
           {error ? (
             <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger sm:col-span-2">
@@ -202,7 +231,7 @@ export function ProjectSettingsPanel({
             </p>
           ) : null}
 
-          {project.canEditProject ? (
+          {canEdit ? (
             <div className="flex sm:col-span-2 sm:justify-end">
               <button
                 type="submit"

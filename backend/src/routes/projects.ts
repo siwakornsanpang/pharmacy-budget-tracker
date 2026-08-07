@@ -8,6 +8,8 @@ import { serializeProject, toNumber } from "../lib/serialize.js";
 
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
+const projectStatusSchema = z.enum(["active", "paused", "completed"]);
+
 const projectSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(5000).default(""),
@@ -15,6 +17,7 @@ const projectSchema = z.object({
   startDate: dateString,
   endDate: dateString.nullable().optional(),
   owner: z.string().trim().min(1).max(120),
+  status: projectStatusSchema.optional(),
 });
 
 async function accessibleProjectIds(userId: string): Promise<string[]> {
@@ -37,7 +40,9 @@ export async function projectRoutes(app: FastifyInstance) {
   app.get("/projects", async (request) => {
     const query = z
       .object({
-        status: z.enum(["all", "active", "completed"]).default("all"),
+        status: z
+          .enum(["all", "active", "paused", "completed"])
+          .default("all"),
         q: z.string().optional(),
       })
       .parse(request.query);
@@ -77,16 +82,11 @@ export async function projectRoutes(app: FastifyInstance) {
       memberRows.map((m) => [m.projectId, m.role]),
     );
 
-    const today = new Date().toISOString().slice(0, 10);
-
     return userProjects
       .map((project) => {
         const spentNum = spentMap.get(project.id) ?? 0;
         const budget = toNumber(project.budget);
         const remaining = budget - spentNum;
-        const completed = Boolean(
-          project.endDate && project.endDate < today,
-        );
         const serialized = serializeProject(project);
         const isCreator = project.userId === request.user.sub;
         const role = isCreator
@@ -104,15 +104,18 @@ export async function projectRoutes(app: FastifyInstance) {
             budget > 0
               ? Math.round(((spentNum - budget) / budget) * 1000) / 10
               : 0,
-          status: completed ? "completed" : "active",
           isCreator,
           role,
+          canEditProject: isCreator || role === "admin",
+          canDeleteProject: isCreator,
+          canEditTransactions:
+            isCreator || role === "admin" || role === "editor",
+          canManageMembers: isCreator,
+          canManagePeople: isCreator || role === "admin",
         };
       })
       .filter((p) => {
-        if (query.status === "active" && p.status !== "active") return false;
-        if (query.status === "completed" && p.status !== "completed")
-          return false;
+        if (query.status !== "all" && p.status !== query.status) return false;
         if (query.q) {
           const q = query.q.toLowerCase();
           return (
@@ -152,6 +155,7 @@ export async function projectRoutes(app: FastifyInstance) {
         startDate: parsed.data.startDate,
         endDate: parsed.data.endDate ?? null,
         owner: parsed.data.owner,
+        status: parsed.data.status ?? "active",
       })
       .returning();
 
@@ -174,7 +178,6 @@ export async function projectRoutes(app: FastifyInstance) {
 
     const spentNum = toNumber(spent);
     const budget = toNumber(access.project.budget);
-    const today = new Date().toISOString().slice(0, 10);
 
     return {
       ...serializeProject(access.project),
@@ -182,10 +185,6 @@ export async function projectRoutes(app: FastifyInstance) {
       remaining: budget - spentNum,
       percentUsed:
         budget > 0 ? Math.round((spentNum / budget) * 1000) / 10 : 0,
-      status:
-        access.project.endDate && access.project.endDate < today
-          ? "completed"
-          : "active",
       ...accessFlags(access),
     };
   });
@@ -200,7 +199,17 @@ export async function projectRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: "ไม่มีสิทธิ์แก้ไขโครงการ" });
     }
 
-    const parsed = projectSchema.partial().safeParse(request.body);
+    const patchSchema = z.object({
+      name: z.string().trim().min(1).max(200).optional(),
+      description: z.string().trim().max(5000).optional(),
+      budget: z.coerce.number().positive().optional(),
+      startDate: dateString.optional(),
+      endDate: dateString.nullable().optional(),
+      owner: z.string().trim().min(1).max(120).optional(),
+      status: projectStatusSchema.optional(),
+    });
+
+    const parsed = patchSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation failed",
@@ -222,6 +231,7 @@ export async function projectRoutes(app: FastifyInstance) {
           ? parsed.data.endDate
           : existing.endDate,
       owner: parsed.data.owner ?? existing.owner,
+      status: parsed.data.status ?? existing.status ?? "active",
     };
 
     if (next.endDate && next.endDate < next.startDate) {

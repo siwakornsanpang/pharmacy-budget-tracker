@@ -5,6 +5,7 @@ import type {
   Project,
   ProjectMember,
   ProjectPerson,
+  ProjectStatus,
   ProjectWithStats,
   Transaction,
 } from "@/lib/types";
@@ -25,6 +26,7 @@ export type ProjectInput = {
   startDate: string;
   endDate: string | null;
   owner: string;
+  status?: ProjectStatus;
 };
 
 export type TransactionInput = {
@@ -69,7 +71,7 @@ export async function registerRequest(
 }
 
 export async function fetchProjects(params?: {
-  status?: "all" | "active" | "completed";
+  status?: "all" | ProjectStatus;
   q?: string;
 }): Promise<ProjectWithStats[]> {
   const search = new URLSearchParams();

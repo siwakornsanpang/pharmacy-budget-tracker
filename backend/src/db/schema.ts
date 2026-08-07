@@ -34,6 +34,8 @@ export const projects = pgTable("projects", {
   startDate: date("start_date").notNull(),
   endDate: date("end_date"),
   owner: varchar("owner", { length: 120 }).notNull(),
+  /** active | paused | completed */
+  status: varchar("status", { length: 20 }).notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

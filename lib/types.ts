@@ -1,6 +1,7 @@
 export type MemberRole = "admin" | "editor" | "viewer";
 export type AccessRole = MemberRole | "creator";
 export type TransactionKind = "general" | "salary";
+export type ProjectStatus = "active" | "paused" | "completed";
 
 export type ProjectAccessFlags = {
   isCreator?: boolean;
@@ -20,6 +21,7 @@ export type Project = {
   startDate: string;
   endDate: string | null;
   owner: string;
+  status?: ProjectStatus;
   createdAt?: string;
 };
 
@@ -45,7 +47,7 @@ export type ProjectWithStats = Project &
     percentUsed: number;
     variance?: number;
     variancePct?: number;
-    status?: "active" | "completed";
+    status: ProjectStatus;
   };
 
 export type ProjectMember = {

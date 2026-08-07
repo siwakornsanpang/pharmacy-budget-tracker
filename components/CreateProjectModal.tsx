@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { ProjectStatusField } from "@/components/ProjectStatusField";
 import type { ProjectInput } from "@/lib/api-services";
-import type { Project } from "@/lib/types";
+import type { Project, ProjectStatus } from "@/lib/types";
 
 type CreateProjectModalProps = {
   open: boolean;
@@ -27,6 +28,7 @@ export function CreateProjectModal({
   const [endDate, setEndDate] = useState("");
   const [unknownEnd, setUnknownEnd] = useState(false);
   const [owner, setOwner] = useState("");
+  const [status, setStatus] = useState<ProjectStatus>("active");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -40,6 +42,11 @@ export function CreateProjectModal({
       setEndDate(initial.endDate ?? "");
       setUnknownEnd(!initial.endDate);
       setOwner(initial.owner);
+      setStatus(
+        initial.status === "paused" || initial.status === "completed"
+          ? initial.status
+          : "active",
+      );
       setError("");
       return;
     }
@@ -50,6 +57,7 @@ export function CreateProjectModal({
     setEndDate("");
     setUnknownEnd(false);
     setOwner("");
+    setStatus("active");
     setError("");
   }, [open, initial]);
 
@@ -63,6 +71,7 @@ export function CreateProjectModal({
     setEndDate("");
     setUnknownEnd(false);
     setOwner("");
+    setStatus("active");
     setError("");
   }
 
@@ -96,6 +105,7 @@ export function CreateProjectModal({
         startDate,
         endDate: unknownEnd ? null : endDate,
         owner: owner.trim(),
+        status,
       });
       if (!isEdit) reset();
       onClose();
@@ -201,6 +211,10 @@ export function CreateProjectModal({
             />
             <span className="text-sm text-fg-muted">ไม่ระบุวันจบ / ยังไม่รู้วันจบ</span>
           </label>
+
+          {isEdit ? (
+            <ProjectStatusField value={status} onChange={setStatus} />
+          ) : null}
 
           {error ? (
             <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger sm:col-span-2">

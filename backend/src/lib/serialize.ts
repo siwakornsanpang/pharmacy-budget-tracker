@@ -15,6 +15,13 @@ export function toNumber(value: string | number): number {
   return typeof value === "number" ? value : Number(value);
 }
 
+function normalizeProjectStatus(
+  value: string | null | undefined,
+): "active" | "paused" | "completed" {
+  if (value === "paused" || value === "completed") return value;
+  return "active";
+}
+
 export function serializeProject(row: {
   id: string;
   name: string;
@@ -23,6 +30,7 @@ export function serializeProject(row: {
   startDate: string;
   endDate: string | null;
   owner: string;
+  status?: string | null;
   createdAt: Date;
 }) {
   return {
@@ -33,6 +41,7 @@ export function serializeProject(row: {
     startDate: row.startDate,
     endDate: row.endDate,
     owner: row.owner,
+    status: normalizeProjectStatus(row.status),
     createdAt: row.createdAt.toISOString(),
   };
 }
