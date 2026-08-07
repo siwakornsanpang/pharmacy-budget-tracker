@@ -681,6 +681,16 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                                   ? "ค่าแรง"
                                   : "ทั่วไป"}
                               </span>
+                              {txn.receiptUrl ? (
+                                <a
+                                  href={txn.receiptUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="rounded-md bg-bg px-1.5 py-0.5 text-[10px] font-semibold text-accent hover:underline"
+                                >
+                                  ใบเสร็จ
+                                </a>
+                              ) : null}
                               {txn.note ? (
                                 <span className="text-xs text-fg-subtle">
                                   {txn.note}
@@ -756,6 +766,7 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
 
           <TransactionFormModal
             open={showTxnModal}
+            projectId={projectId}
             initial={editingTxn}
             people={people}
             defaultKind={txnDefaultKind}

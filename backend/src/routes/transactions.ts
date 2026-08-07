@@ -17,6 +17,10 @@ const transactionSchema = z.object({
   to: z.string().trim().max(200).optional(),
   personId: z.string().uuid().nullable().optional(),
   note: z.string().trim().max(2000).optional(),
+  receiptUrl: z
+    .union([z.string().url(), z.literal(""), z.null()])
+    .optional()
+    .transform((v) => (v === "" || v === undefined ? null : v)),
 });
 
 const transactionPatchSchema = transactionSchema.partial();
@@ -157,6 +161,7 @@ export async function transactionRoutes(app: FastifyInstance) {
         paidTo,
         personId,
         note: parsed.data.note || null,
+        receiptUrl: parsed.data.receiptUrl ?? null,
       })
       .returning();
 
@@ -243,6 +248,10 @@ export async function transactionRoutes(app: FastifyInstance) {
           parsed.data.note !== undefined
             ? parsed.data.note || null
             : existing.note,
+        receiptUrl:
+          parsed.data.receiptUrl !== undefined
+            ? parsed.data.receiptUrl
+            : existing.receiptUrl,
       })
       .where(eq(transactions.id, id))
       .returning();

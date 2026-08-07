@@ -1,4 +1,5 @@
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
+import { clearStoredAuth, getToken } from "@/lib/auth";
 import type {
   MemberRole,
   Project,
@@ -35,6 +36,7 @@ export type TransactionInput = {
   to?: string;
   personId?: string | null;
   note?: string;
+  receiptUrl?: string | null;
 };
 
 export type PersonInput = {
@@ -124,6 +126,50 @@ export async function updateTransaction(
 
 export async function deleteTransaction(id: string): Promise<void> {
   await api<void>(`/transactions/${id}`, { method: "DELETE" });
+}
+
+export async function uploadReceipt(
+  projectId: string,
+  file: File,
+): Promise<{ url: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const token = getToken();
+  const base =
+    process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
+    "http://localhost:8080";
+
+  let response: Response;
+  try {
+    response = await fetch(`${base}/projects/${projectId}/receipts`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form,
+    });
+  } catch {
+    throw new ApiError(0, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่อีกครั้ง");
+  }
+
+  const data = (await response.json().catch(() => ({}))) as {
+    error?: string;
+    url?: string;
+  };
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      clearStoredAuth();
+    }
+    throw new ApiError(
+      response.status,
+      data.error || `Upload failed (${response.status})`,
+    );
+  }
+
+  if (!data.url) {
+    throw new ApiError(500, "อัปโหลดสำเร็จแต่ไม่ได้รับ URL");
+  }
+
+  return { url: data.url };
 }
 
 export async function fetchMembers(
