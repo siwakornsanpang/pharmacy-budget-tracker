@@ -532,14 +532,24 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                   </div>
 
                   <div className="mt-5">
-                    <div className="mb-2 flex justify-between text-xs text-fg-subtle">
-                      <span>
-                        {formatDate(project.startDate)} –{" "}
-                        {project.endDate
-                          ? formatDate(project.endDate)
-                          : "ไม่ระบุวันจบ"}
-                      </span>
-                      <span>Owner · {project.owner}</span>
+                    <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-medium text-fg-muted">
+                          Budget used
+                        </p>
+                        <p className="mt-0.5 text-xs text-fg-subtle">
+                          สัดส่วนงบที่ใช้ไปแล้วจากงบทั้งหมด
+                        </p>
+                      </div>
+                      <p
+                        className={`text-sm font-semibold tabular-nums ${
+                          metrics.percentUsed >= 90
+                            ? "text-danger"
+                            : "text-accent"
+                        }`}
+                      >
+                        {metrics.percentUsed}%
+                      </p>
                     </div>
                     <div className="h-3 overflow-hidden rounded-full bg-accent-soft">
                       <div
@@ -548,6 +558,15 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                           width: `${Math.min(metrics.percentUsed, 100)}%`,
                         }}
                       />
+                    </div>
+                    <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-fg-subtle">
+                      <span>
+                        {formatDate(project.startDate)} –{" "}
+                        {project.endDate
+                          ? formatDate(project.endDate)
+                          : "ไม่ระบุวันจบ"}
+                      </span>
+                      <span>Owner · {project.owner}</span>
                     </div>
                   </div>
                 </section>
