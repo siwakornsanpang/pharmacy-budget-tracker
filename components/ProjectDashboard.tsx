@@ -115,9 +115,36 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
   );
 
   const categoriesInUse = useMemo(() => {
-    const set = new Set(transactions.map((t) => t.category));
+    const scoped =
+      kindFilter === "all"
+        ? transactions
+        : transactions.filter((t) => (t.kind ?? "general") === kindFilter);
+
+    const set = new Set(
+      scoped
+        .map((t) => t.category)
+        .filter((c) => {
+          if (kindFilter === "general" && c === "ค่าแรง") return false;
+          if (kindFilter === "salary" && c !== "ค่าแรง") return false;
+          return Boolean(c);
+        }),
+    );
+
+    if (kindFilter === "salary") {
+      set.add("ค่าแรง");
+    }
+
     return [...set].sort();
-  }, [transactions]);
+  }, [transactions, kindFilter]);
+
+  useEffect(() => {
+    if (
+      filterCategory !== "all" &&
+      !categoriesInUse.includes(filterCategory)
+    ) {
+      setFilterCategory("all");
+    }
+  }, [kindFilter, categoriesInUse, filterCategory]);
 
   const filtered = useMemo(() => {
     let list = [...transactions];
@@ -563,7 +590,13 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                   onChange={(e) => setFilterCategory(e.target.value)}
                   className="input"
                 >
-                  <option value="all">All categories</option>
+                  <option value="all">
+                    {kindFilter === "salary"
+                      ? "ทุกหมวดค่าแรง"
+                      : kindFilter === "general"
+                        ? "ทุกหมวดรายจ่ายทั่วไป"
+                        : "All categories"}
+                  </option>
                   {categoriesInUse.map((c) => (
                     <option key={c} value={c}>
                       {c}
