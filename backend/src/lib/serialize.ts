@@ -15,10 +15,15 @@ export function toNumber(value: string | number): number {
   return typeof value === "number" ? value : Number(value);
 }
 
-function normalizeProjectStatus(
+/** On Hold stays; past end date auto-completes; otherwise use stored status. */
+export function resolveStoredProjectStatus(
   value: string | null | undefined,
+  endDate: string | null | undefined,
+  today = new Date().toISOString().slice(0, 10),
 ): "active" | "paused" | "completed" {
-  if (value === "paused" || value === "completed") return value;
+  if (value === "paused") return "paused";
+  if (endDate && endDate < today) return "completed";
+  if (value === "completed") return "completed";
   return "active";
 }
 
@@ -41,7 +46,7 @@ export function serializeProject(row: {
     startDate: row.startDate,
     endDate: row.endDate,
     owner: row.owner,
-    status: normalizeProjectStatus(row.status),
+    status: resolveStoredProjectStatus(row.status, row.endDate),
     createdAt: row.createdAt.toISOString(),
   };
 }

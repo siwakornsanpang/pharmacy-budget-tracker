@@ -1,11 +1,17 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { resolveProjectStatus } from "@/components/ProjectCard";
+import { DeleteProjectModal } from "@/components/DeleteProjectModal";
 import { ProjectMembersPanel } from "@/components/ProjectMembersPanel";
 import { ProjectPeoplePanel } from "@/components/ProjectPeoplePanel";
 import { ProjectStatusField } from "@/components/ProjectStatusField";
 import type { ProjectInput } from "@/lib/api-services";
 import type { ProjectStatus, ProjectWithStats } from "@/lib/types";
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 type ProjectSettingsPanelProps = {
   project: ProjectWithStats;
@@ -27,17 +33,14 @@ export function ProjectSettingsPanel({
   const [endDate, setEndDate] = useState(project.endDate ?? "");
   const [unknownEnd, setUnknownEnd] = useState(!project.endDate);
   const [owner, setOwner] = useState(project.owner);
-  const [status, setStatus] = useState<ProjectStatus>(
-    project.status === "paused" || project.status === "completed"
-      ? project.status
-      : "active",
+  const [status, setStatus] = useState<ProjectStatus>(() =>
+    resolveProjectStatus(project),
   );
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
@@ -51,11 +54,7 @@ export function ProjectSettingsPanel({
     setEndDate(project.endDate ?? "");
     setUnknownEnd(!project.endDate);
     setOwner(project.owner);
-    setStatus(
-      project.status === "paused" || project.status === "completed"
-        ? project.status
-        : "active",
-    );
+    setStatus(resolveProjectStatus(project));
     setError("");
     setSavedOk(false);
   }, [
@@ -68,6 +67,22 @@ export function ProjectSettingsPanel({
     project.owner,
     project.status,
   ]);
+
+  const endKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const key = unknownEnd ? "open" : endDate;
+    const pastDue = !unknownEnd && Boolean(endDate) && endDate < todayISO();
+    const prev = endKeyRef.current;
+    endKeyRef.current = key;
+
+    setStatus((s) => {
+      if (s === "paused") return s;
+      if (pastDue) return "completed";
+      if (prev !== null && prev !== key && s === "completed") return "active";
+      return s;
+    });
+  }, [endDate, unknownEnd]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -113,10 +128,6 @@ export function ProjectSettingsPanel({
   }
 
   async function handleDeleteConfirm() {
-    if (deleteConfirm.trim() !== project.name) {
-      setDeleteError("ชื่อโครงการไม่ตรง — พิมพ์ชื่อให้ตรงทุกตัวอักษร");
-      return;
-    }
     setDeleteLoading(true);
     setDeleteError("");
     try {
@@ -266,67 +277,31 @@ export function ProjectSettingsPanel({
           <p className="mt-1 text-sm text-fg-muted">
             ลบโครงการนี้จะลบรายการธุรกรรมทั้งหมดด้วย และกู้คืนไม่ได้
           </p>
-
-          {!deleteOpen ? (
-            <button
-              type="button"
-              onClick={() => {
-                setDeleteOpen(true);
-                setDeleteConfirm("");
-                setDeleteError("");
-              }}
-              className="mt-4 h-10 rounded-lg border border-danger px-4 text-sm font-semibold text-danger transition hover:bg-danger-soft"
-            >
-              Delete Project
-            </button>
-          ) : (
-            <div className="mt-4 space-y-3 rounded-xl border border-border bg-bg-elevated p-4">
-              <p className="text-sm text-fg-muted">
-                พิมพ์ชื่อโครงการ{" "}
-                <span className="font-semibold text-fg">{project.name}</span>{" "}
-                เพื่อยืนยันการลบ
-              </p>
-              <input
-                value={deleteConfirm}
-                onChange={(e) => {
-                  setDeleteConfirm(e.target.value);
-                  setDeleteError("");
-                }}
-                placeholder="พิมพ์ชื่อโครงการให้ตรง"
-                className={inputClass}
-                autoComplete="off"
-              />
-              {deleteError ? (
-                <p className="text-sm text-danger">{deleteError}</p>
-              ) : null}
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={deleteLoading}
-                  onClick={() => {
-                    setDeleteOpen(false);
-                    setDeleteConfirm("");
-                    setDeleteError("");
-                  }}
-                  className="h-10 rounded-lg border border-border px-4 text-sm font-medium text-fg-muted hover:border-accent hover:text-accent disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={
-                    deleteLoading || deleteConfirm.trim() !== project.name
-                  }
-                  onClick={() => void handleDeleteConfirm()}
-                  className="h-10 rounded-lg bg-danger px-4 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-40"
-                >
-                  {deleteLoading ? "Deleting..." : "ยืนยันลบโครงการ"}
-                </button>
-              </div>
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              setDeleteOpen(true);
+              setDeleteError("");
+            }}
+            className="mt-4 h-10 rounded-lg border border-danger px-4 text-sm font-semibold text-danger transition hover:bg-danger-soft"
+          >
+            Delete Project
+          </button>
         </section>
       ) : null}
+
+      <DeleteProjectModal
+        open={deleteOpen}
+        projectName={project.name}
+        loading={deleteLoading}
+        error={deleteError}
+        onClose={() => {
+          if (deleteLoading) return;
+          setDeleteOpen(false);
+          setDeleteError("");
+        }}
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   );
 }

@@ -25,12 +25,14 @@ export function isProjectCompleted(
   return end.getTime() < today.getTime();
 }
 
-export function resolveProjectStatus(
-  project: Pick<ProjectWithStats, "status" | "endDate">,
-): ProjectStatus {
-  if (project.status === "paused" || project.status === "completed") {
-    return project.status;
-  }
+export function resolveProjectStatus(project: {
+  status?: ProjectStatus | null;
+  endDate?: string | null;
+}): ProjectStatus {
+  if (project.status === "paused") return "paused";
+  // End date already passed → completed (even if stored as active)
+  if (isProjectCompleted(project.endDate)) return "completed";
+  if (project.status === "completed") return "completed";
   return "active";
 }
 

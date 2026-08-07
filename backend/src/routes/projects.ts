@@ -145,6 +145,13 @@ export async function projectRoutes(app: FastifyInstance) {
         .send({ error: "End date must be on or after start date" });
     }
 
+    const today = new Date().toISOString().slice(0, 10);
+    const endDate = parsed.data.endDate ?? null;
+    let status = parsed.data.status ?? "active";
+    if (status !== "paused" && endDate && endDate < today) {
+      status = "completed";
+    }
+
     const [row] = await db
       .insert(projects)
       .values({
@@ -153,9 +160,9 @@ export async function projectRoutes(app: FastifyInstance) {
         description: parsed.data.description,
         budget: parsed.data.budget.toFixed(2),
         startDate: parsed.data.startDate,
-        endDate: parsed.data.endDate ?? null,
+        endDate,
         owner: parsed.data.owner,
-        status: parsed.data.status ?? "active",
+        status,
       })
       .returning();
 
@@ -218,6 +225,27 @@ export async function projectRoutes(app: FastifyInstance) {
     }
 
     const existing = access.project;
+    const today = new Date().toISOString().slice(0, 10);
+    const nextEndDate =
+      parsed.data.endDate !== undefined
+        ? parsed.data.endDate
+        : existing.endDate;
+
+    let nextStatus = parsed.data.status ?? existing.status ?? "active";
+    if (nextStatus === "paused") {
+      // On Hold is always manual
+    } else if (nextEndDate && nextEndDate < today) {
+      // Past end date → completed automatically
+      nextStatus = "completed";
+    } else if (parsed.data.status !== undefined) {
+      nextStatus = parsed.data.status;
+    } else {
+      const wasPast = Boolean(existing.endDate && existing.endDate < today);
+      const nowOpen = !nextEndDate || nextEndDate >= today;
+      // Extending / clearing end date reopens a past-due project
+      if (wasPast && nowOpen) nextStatus = "active";
+    }
+
     const next = {
       name: parsed.data.name ?? existing.name,
       description: parsed.data.description ?? existing.description,
@@ -226,12 +254,9 @@ export async function projectRoutes(app: FastifyInstance) {
           ? parsed.data.budget.toFixed(2)
           : existing.budget,
       startDate: parsed.data.startDate ?? existing.startDate,
-      endDate:
-        parsed.data.endDate !== undefined
-          ? parsed.data.endDate
-          : existing.endDate,
+      endDate: nextEndDate,
       owner: parsed.data.owner ?? existing.owner,
-      status: parsed.data.status ?? existing.status ?? "active",
+      status: nextStatus,
     };
 
     if (next.endDate && next.endDate < next.startDate) {

@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { resolveProjectStatus } from "@/components/ProjectCard";
 import { ProjectStatusField } from "@/components/ProjectStatusField";
 import type { ProjectInput } from "@/lib/api-services";
 import type { Project, ProjectStatus } from "@/lib/types";
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 type CreateProjectModalProps = {
   open: boolean;
@@ -42,11 +47,7 @@ export function CreateProjectModal({
       setEndDate(initial.endDate ?? "");
       setUnknownEnd(!initial.endDate);
       setOwner(initial.owner);
-      setStatus(
-        initial.status === "paused" || initial.status === "completed"
-          ? initial.status
-          : "active",
-      );
+      setStatus(resolveProjectStatus(initial));
       setError("");
       return;
     }
@@ -60,6 +61,27 @@ export function CreateProjectModal({
     setStatus("active");
     setError("");
   }, [open, initial]);
+
+  const endKeyRef = useRef<string | null>(null);
+
+  // Auto-complete when end date passes; reopen when user extends the deadline
+  useEffect(() => {
+    if (!open) {
+      endKeyRef.current = null;
+      return;
+    }
+    const key = unknownEnd ? "open" : endDate;
+    const pastDue = !unknownEnd && Boolean(endDate) && endDate < todayISO();
+    const prev = endKeyRef.current;
+    endKeyRef.current = key;
+
+    setStatus((s) => {
+      if (s === "paused") return s;
+      if (pastDue) return "completed";
+      if (prev !== null && prev !== key && s === "completed") return "active";
+      return s;
+    });
+  }, [open, endDate, unknownEnd]);
 
   if (!open) return null;
 

@@ -8,6 +8,7 @@ import {
   resolveProjectStatus,
 } from "@/components/ProjectCard";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
+import { DeleteProjectModal } from "@/components/DeleteProjectModal";
 import { ProjectsPageSkeleton } from "@/components/Skeleton";
 import { ApiError } from "@/lib/api";
 import {
@@ -31,6 +32,10 @@ export default function ProjectsPage() {
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [deletingProject, setDeletingProject] =
+    useState<ProjectWithStats | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   async function load(status: StatusFilter = statusFilter, q = query) {
     setError("");
@@ -120,19 +125,25 @@ export default function ProjectsPage() {
     await refreshLists();
   }
 
-  async function handleDelete(project: ProjectWithStats) {
-    if (
-      !confirm(
-        `ลบโครงการ "${project.name}" ใช่ไหม? รายการธุรกรรมทั้งหมดในโครงการจะถูกลบด้วย`,
-      )
-    ) {
-      return;
-    }
+  function openDelete(project: ProjectWithStats) {
+    setDeletingProject(project);
+    setDeleteError("");
+  }
+
+  async function confirmDelete() {
+    if (!deletingProject) return;
+    setDeleteLoading(true);
+    setDeleteError("");
     try {
-      await deleteProject(project.id);
+      await deleteProject(deletingProject.id);
+      setDeletingProject(null);
       await refreshLists();
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "ลบโครงการไม่สำเร็จ");
+      setDeleteError(
+        err instanceof ApiError ? err.message : "ลบโครงการไม่สำเร็จ",
+      );
+    } finally {
+      setDeleteLoading(false);
     }
   }
 
@@ -307,7 +318,7 @@ export default function ProjectsPage() {
                             : undefined
                         }
                         onDelete={
-                          project.isCreator ? handleDelete : undefined
+                          project.isCreator ? openDelete : undefined
                         }
                       />
                     ))}
@@ -325,6 +336,19 @@ export default function ProjectsPage() {
               setEditingProject(null);
             }}
             onSave={editingProject ? handleUpdate : handleCreate}
+          />
+
+          <DeleteProjectModal
+            open={Boolean(deletingProject)}
+            projectName={deletingProject?.name ?? ""}
+            loading={deleteLoading}
+            error={deleteError}
+            onClose={() => {
+              if (deleteLoading) return;
+              setDeletingProject(null);
+              setDeleteError("");
+            }}
+            onConfirm={confirmDelete}
           />
         </div>
       )}
