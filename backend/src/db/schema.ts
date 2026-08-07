@@ -32,7 +32,7 @@ export const projects = pgTable("projects", {
   description: text("description").notNull().default(""),
   budget: numeric("budget", { precision: 14, scale: 2 }).notNull(),
   startDate: date("start_date").notNull(),
-  endDate: date("end_date").notNull(),
+  endDate: date("end_date"),
   owner: varchar("owner", { length: 120 }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
@@ -80,11 +80,15 @@ export const transactions = pgTable("transactions", {
   projectId: uuid("project_id")
     .notNull()
     .references(() => projects.id, { onDelete: "cascade" }),
+  kind: varchar("kind", { length: 20 }).notNull().default("general"),
   title: varchar("title", { length: 200 }).notNull(),
   category: varchar("category", { length: 100 }).notNull(),
   transactionDate: date("transaction_date").notNull(),
   amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
   paidTo: varchar("paid_to", { length: 200 }).notNull(),
+  personId: uuid("person_id").references(() => projectPeople.id, {
+    onDelete: "set null",
+  }),
   note: text("note"),
   receiptUrl: text("receipt_url"),
   createdAt: timestamp("created_at", { withTimezone: true })

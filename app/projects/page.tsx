@@ -149,7 +149,7 @@ export default function ProjectsPage() {
         p.remaining,
         p.percentUsed,
         p.startDate,
-        p.endDate,
+        p.endDate ?? "",
         p.status ??
           (isProjectCompleted(p.endDate) ? "Completed" : "Active"),
       ]),

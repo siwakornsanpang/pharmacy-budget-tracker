@@ -71,6 +71,26 @@ export function computeFinanceMetrics(
         ? 0
         : null;
 
+  if (!project.endDate) {
+    return {
+      budget: project.budget,
+      spent,
+      remaining,
+      percentUsed,
+      variance,
+      variancePct,
+      cpi,
+      transactionCount: transactions.length,
+      avgTransaction,
+      largestExpense,
+      burnRatePerDay,
+      runwayDays,
+      eac: null,
+      plannedValue: 0,
+      schedulePct: 0,
+    };
+  }
+
   const totalProjectDays = daysBetween(project.startDate, project.endDate);
   const daysElapsed = daysBetween(
     project.startDate,

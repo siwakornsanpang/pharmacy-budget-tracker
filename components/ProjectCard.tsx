@@ -15,7 +15,11 @@ function progressTone(percent: number): string {
   return "bg-accent-mid";
 }
 
-export function isProjectCompleted(endDate: string, today = new Date()): boolean {
+export function isProjectCompleted(
+  endDate: string | null | undefined,
+  today = new Date(),
+): boolean {
+  if (!endDate) return false;
   const end = new Date(endDate);
   end.setHours(23, 59, 59, 999);
   return end.getTime() < today.getTime();
@@ -98,7 +102,8 @@ export function ProjectCard({
         <p className="mb-4 text-xs text-fg-subtle">
           <span className="font-medium text-fg-muted">Duration</span>
           {" · "}
-          {formatDate(project.startDate)} – {formatDate(project.endDate)}
+          {formatDate(project.startDate)} –{" "}
+          {project.endDate ? formatDate(project.endDate) : "ไม่ระบุวันจบ"}
         </p>
 
         <div className="mb-2 flex items-end justify-between gap-2 text-sm">

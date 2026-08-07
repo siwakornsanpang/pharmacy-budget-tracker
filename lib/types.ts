@@ -1,5 +1,6 @@
 export type MemberRole = "admin" | "editor" | "viewer";
 export type AccessRole = MemberRole | "creator";
+export type TransactionKind = "general" | "salary";
 
 export type ProjectAccessFlags = {
   isCreator?: boolean;
@@ -17,7 +18,7 @@ export type Project = {
   description: string;
   budget: number;
   startDate: string;
-  endDate: string;
+  endDate: string | null;
   owner: string;
   createdAt?: string;
 };
@@ -25,11 +26,13 @@ export type Project = {
 export type Transaction = {
   id: string;
   projectId: string;
+  kind?: TransactionKind;
   title: string;
   category: string;
   transactionDate: string;
   amount: number;
   to: string;
+  personId?: string;
   note?: string;
   receiptUrl?: string;
   createdAt?: string;

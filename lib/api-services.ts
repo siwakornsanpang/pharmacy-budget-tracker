@@ -22,16 +22,18 @@ export type ProjectInput = {
   description: string;
   budget: number;
   startDate: string;
-  endDate: string;
+  endDate: string | null;
   owner: string;
 };
 
 export type TransactionInput = {
+  kind: "general" | "salary";
   title: string;
-  category: string;
+  category?: string;
   transactionDate: string;
   amount: number;
-  to: string;
+  to?: string;
+  personId?: string | null;
   note?: string;
 };
 

@@ -6,12 +6,14 @@ import { projectMembers, projects, transactions } from "../db/schema.js";
 import { accessFlags, getProjectAccess } from "../lib/access.js";
 import { serializeProject, toNumber } from "../lib/serialize.js";
 
+const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
 const projectSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(5000).default(""),
   budget: z.coerce.number().positive(),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startDate: dateString,
+  endDate: dateString.nullable().optional(),
   owner: z.string().trim().min(1).max(120),
 });
 
@@ -82,7 +84,9 @@ export async function projectRoutes(app: FastifyInstance) {
         const spentNum = spentMap.get(project.id) ?? 0;
         const budget = toNumber(project.budget);
         const remaining = budget - spentNum;
-        const completed = project.endDate < today;
+        const completed = Boolean(
+          project.endDate && project.endDate < today,
+        );
         const serialized = serializeProject(project);
         const isCreator = project.userId === request.user.sub;
         const role = isCreator
@@ -129,7 +133,10 @@ export async function projectRoutes(app: FastifyInstance) {
       });
     }
 
-    if (parsed.data.endDate < parsed.data.startDate) {
+    if (
+      parsed.data.endDate &&
+      parsed.data.endDate < parsed.data.startDate
+    ) {
       return reply
         .code(400)
         .send({ error: "End date must be on or after start date" });
@@ -143,7 +150,7 @@ export async function projectRoutes(app: FastifyInstance) {
         description: parsed.data.description,
         budget: parsed.data.budget.toFixed(2),
         startDate: parsed.data.startDate,
-        endDate: parsed.data.endDate,
+        endDate: parsed.data.endDate ?? null,
         owner: parsed.data.owner,
       })
       .returning();
@@ -175,7 +182,10 @@ export async function projectRoutes(app: FastifyInstance) {
       remaining: budget - spentNum,
       percentUsed:
         budget > 0 ? Math.round((spentNum / budget) * 1000) / 10 : 0,
-      status: access.project.endDate < today ? "completed" : "active",
+      status:
+        access.project.endDate && access.project.endDate < today
+          ? "completed"
+          : "active",
       ...accessFlags(access),
     };
   });
@@ -207,11 +217,14 @@ export async function projectRoutes(app: FastifyInstance) {
           ? parsed.data.budget.toFixed(2)
           : existing.budget,
       startDate: parsed.data.startDate ?? existing.startDate,
-      endDate: parsed.data.endDate ?? existing.endDate,
+      endDate:
+        parsed.data.endDate !== undefined
+          ? parsed.data.endDate
+          : existing.endDate,
       owner: parsed.data.owner ?? existing.owner,
     };
 
-    if (next.endDate < next.startDate) {
+    if (next.endDate && next.endDate < next.startDate) {
       return reply
         .code(400)
         .send({ error: "End date must be on or after start date" });

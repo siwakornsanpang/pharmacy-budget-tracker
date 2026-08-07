@@ -21,7 +21,7 @@ export function serializeProject(row: {
   description: string;
   budget: string;
   startDate: string;
-  endDate: string;
+  endDate: string | null;
   owner: string;
   createdAt: Date;
 }) {
@@ -40,11 +40,13 @@ export function serializeProject(row: {
 export function serializeTransaction(row: {
   id: string;
   projectId: string;
+  kind: string;
   title: string;
   category: string;
   transactionDate: string;
   amount: string;
   paidTo: string;
+  personId: string | null;
   note: string | null;
   receiptUrl: string | null;
   createdAt: Date;
@@ -52,11 +54,15 @@ export function serializeTransaction(row: {
   return {
     id: row.id,
     projectId: row.projectId,
+    kind: (row.kind === "salary" ? "salary" : "general") as
+      | "general"
+      | "salary",
     title: row.title,
     category: row.category,
     transactionDate: row.transactionDate,
     amount: toNumber(row.amount),
     to: row.paidTo,
+    personId: row.personId ?? undefined,
     note: row.note ?? undefined,
     receiptUrl: row.receiptUrl ?? undefined,
     createdAt: row.createdAt.toISOString(),

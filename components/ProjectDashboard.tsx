@@ -11,7 +11,6 @@ import { AuthGate } from "@/components/AuthGate";
 import { AppHeader } from "@/components/AppHeader";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
 import { FinanceCharts } from "@/components/FinanceCharts";
-import { AccountantKpis } from "@/components/AccountantKpis";
 import { VendorSummary } from "@/components/VendorSummary";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { TransactionFormModal } from "@/components/TransactionFormModal";
@@ -22,6 +21,7 @@ import {
   createTransaction,
   deleteProject,
   deleteTransaction,
+  fetchPeople,
   fetchProject,
   fetchTransactions,
   updateProject,
@@ -39,7 +39,12 @@ import {
   formatCurrencyPrecise,
   formatDate,
 } from "@/lib/format";
-import type { ProjectWithStats, Transaction } from "@/lib/types";
+import type {
+  ProjectPerson,
+  ProjectWithStats,
+  Transaction,
+  TransactionKind,
+} from "@/lib/types";
 
 type ProjectDashboardProps = {
   projectId: string;
@@ -59,22 +64,29 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [people, setPeople] = useState<ProjectPerson[]>([]);
   const [showEditProject, setShowEditProject] = useState(false);
   const [showTxnModal, setShowTxnModal] = useState(false);
   const [editingTxn, setEditingTxn] = useState<Transaction | null>(null);
+  const [txnDefaultKind, setTxnDefaultKind] =
+    useState<TransactionKind>("general");
+  const [kindFilter, setKindFilter] = useState<"all" | TransactionKind>("all");
 
   async function reload() {
     setLoadError("");
     try {
-      const [projectData, txnData] = await Promise.all([
+      const [projectData, txnData, peopleData] = await Promise.all([
         fetchProject(projectId),
         fetchTransactions(projectId),
+        fetchPeople(projectId),
       ]);
       setProject(projectData);
       setTransactions(txnData);
+      setPeople(peopleData);
     } catch (err) {
       setProject(null);
       setTransactions([]);
+      setPeople([]);
       setLoadError(
         err instanceof ApiError ? err.message : "โหลดข้อมูลไม่สำเร็จ",
       );
@@ -108,6 +120,9 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
 
   const filtered = useMemo(() => {
     let list = [...transactions];
+    if (kindFilter !== "all") {
+      list = list.filter((t) => (t.kind ?? "general") === kindFilter);
+    }
     const q = search.trim().toLowerCase();
     if (q) {
       list = list.filter(
@@ -146,6 +161,7 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
     return list;
   }, [
     transactions,
+    kindFilter,
     search,
     filterCategory,
     dateFrom,
@@ -171,13 +187,17 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
     return map;
   }, [transactions]);
 
-  function openCreateTransaction() {
+  function openCreateTransaction(kind: TransactionKind = "general") {
     setEditingTxn(null);
+    setTxnDefaultKind(kind);
+    void fetchPeople(projectId).then(setPeople).catch(() => undefined);
     setShowTxnModal(true);
   }
 
   function openEditTransaction(txn: Transaction) {
     setEditingTxn(txn);
+    setTxnDefaultKind(txn.kind === "salary" ? "salary" : "general");
+    void fetchPeople(projectId).then(setPeople).catch(() => undefined);
     setShowTxnModal(true);
   }
 
@@ -381,13 +401,22 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                     Print
                   </button>
                   {project.canEditTransactions ? (
-                    <button
-                      type="button"
-                      onClick={openCreateTransaction}
-                      className="h-9 rounded-lg bg-accent px-3 text-sm font-semibold text-white transition hover:bg-accent-hover"
-                    >
-                      + Add Transaction
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => openCreateTransaction("general")}
+                        className="h-9 rounded-lg bg-accent px-3 text-sm font-semibold text-white transition hover:bg-accent-hover"
+                      >
+                        + รายจ่ายทั่วไป
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openCreateTransaction("salary")}
+                        className="h-9 rounded-lg border border-accent px-3 text-sm font-semibold text-accent transition hover:bg-accent-soft"
+                      >
+                        + ค่าแรง
+                      </button>
+                    </>
                   ) : null}
                 </div>
               </div>
@@ -418,7 +447,9 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                 <div className="mb-2 flex justify-between text-xs text-fg-subtle">
                   <span>
                     {formatDate(project.startDate)} –{" "}
-                    {formatDate(project.endDate)}
+                    {project.endDate
+                      ? formatDate(project.endDate)
+                      : "ไม่ระบุวันจบ"}
                   </span>
                   <span>Owner · {project.owner}</span>
                 </div>
@@ -431,20 +462,6 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                   />
                 </div>
               </div>
-            </section>
-
-            {/* Accountant KPIs */}
-            <section
-              className="animate-fade-up mb-8"
-              style={{ animationDelay: "40ms" }}
-            >
-              <h3 className="mb-1 text-lg font-semibold text-fg">
-                Quick Summary
-              </h3>
-              <p className="mb-3 text-sm text-fg-muted">
-                ตัวเลขสำคัญแบบเข้าใจง่าย
-              </p>
-              <AccountantKpis metrics={metrics} />
             </section>
 
             {/* Charts + vendors */}
@@ -489,14 +506,46 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                   Transactions
                 </h3>
                 {project.canEditTransactions ? (
-                  <button
-                    type="button"
-                    onClick={openCreateTransaction}
-                    className="h-10 rounded-lg bg-accent px-4 text-sm font-semibold text-white transition hover:bg-accent-hover"
-                  >
-                    + Add Transaction
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openCreateTransaction("general")}
+                      className="h-10 rounded-lg bg-accent px-4 text-sm font-semibold text-white transition hover:bg-accent-hover"
+                    >
+                      + รายจ่ายทั่วไป
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openCreateTransaction("salary")}
+                      className="h-10 rounded-lg border border-accent px-4 text-sm font-semibold text-accent transition hover:bg-accent-soft"
+                    >
+                      + ค่าแรง
+                    </button>
+                  </div>
                 ) : null}
+              </div>
+
+              <div className="mb-4 flex flex-wrap gap-2">
+                {(
+                  [
+                    ["all", "ทั้งหมด"],
+                    ["general", "รายจ่ายทั่วไป"],
+                    ["salary", "ค่าแรง"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setKindFilter(key)}
+                    className={`h-8 rounded-lg px-3 text-xs font-medium transition ${
+                      kindFilter === key
+                        ? "bg-accent text-white"
+                        : "border border-border text-fg-muted hover:border-accent hover:text-accent"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
 
               {/* Filters */}
@@ -620,11 +669,24 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                           </td>
                           <td className="px-4 py-3">
                             <div className="font-medium text-fg">{txn.title}</div>
-                            {txn.note ? (
-                              <div className="mt-0.5 text-xs text-fg-subtle">
-                                {txn.note}
-                              </div>
-                            ) : null}
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              <span
+                                className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
+                                  (txn.kind ?? "general") === "salary"
+                                    ? "bg-accent-soft text-accent"
+                                    : "bg-bg text-fg-muted"
+                                }`}
+                              >
+                                {(txn.kind ?? "general") === "salary"
+                                  ? "ค่าแรง"
+                                  : "ทั่วไป"}
+                              </span>
+                              {txn.note ? (
+                                <span className="text-xs text-fg-subtle">
+                                  {txn.note}
+                                </span>
+                              ) : null}
+                            </div>
                           </td>
                           <td className="px-4 py-3">
                             <span className="rounded-md bg-bg px-2 py-0.5 text-xs text-fg-muted">
@@ -695,6 +757,8 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
           <TransactionFormModal
             open={showTxnModal}
             initial={editingTxn}
+            people={people}
+            defaultKind={txnDefaultKind}
             onClose={() => {
               setShowTxnModal(false);
               setEditingTxn(null);

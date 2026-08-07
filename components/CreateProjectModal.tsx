@@ -25,6 +25,7 @@ export function CreateProjectModal({
     new Date().toISOString().slice(0, 10),
   );
   const [endDate, setEndDate] = useState("");
+  const [unknownEnd, setUnknownEnd] = useState(false);
   const [owner, setOwner] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,7 +37,8 @@ export function CreateProjectModal({
       setDescription(initial.description);
       setBudget(String(initial.budget));
       setStartDate(initial.startDate);
-      setEndDate(initial.endDate);
+      setEndDate(initial.endDate ?? "");
+      setUnknownEnd(!initial.endDate);
       setOwner(initial.owner);
       setError("");
       return;
@@ -46,6 +48,7 @@ export function CreateProjectModal({
     setBudget("");
     setStartDate(new Date().toISOString().slice(0, 10));
     setEndDate("");
+    setUnknownEnd(false);
     setOwner("");
     setError("");
   }, [open, initial]);
@@ -58,6 +61,7 @@ export function CreateProjectModal({
     setBudget("");
     setStartDate(new Date().toISOString().slice(0, 10));
     setEndDate("");
+    setUnknownEnd(false);
     setOwner("");
     setError("");
   }
@@ -65,21 +69,19 @@ export function CreateProjectModal({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const parsedBudget = Number(budget.replace(/,/g, ""));
-    if (
-      !name.trim() ||
-      !description.trim() ||
-      !owner.trim() ||
-      !startDate ||
-      !endDate
-    ) {
+    if (!name.trim() || !description.trim() || !owner.trim() || !startDate) {
       setError("กรุณากรอกข้อมูลให้ครบ");
+      return;
+    }
+    if (!unknownEnd && !endDate) {
+      setError("กรุณาใส่วันสิ้นสุด หรือเลือกไม่ระบุวันจบ");
       return;
     }
     if (!Number.isFinite(parsedBudget) || parsedBudget <= 0) {
       setError("งบประมาณต้องมากกว่า 0");
       return;
     }
-    if (new Date(endDate) < new Date(startDate)) {
+    if (!unknownEnd && endDate && new Date(endDate) < new Date(startDate)) {
       setError("วันสิ้นสุดต้องไม่ก่อนวันเริ่ม");
       return;
     }
@@ -92,7 +94,7 @@ export function CreateProjectModal({
         description: description.trim(),
         budget: parsedBudget,
         startDate,
-        endDate,
+        endDate: unknownEnd ? null : endDate,
         owner: owner.trim(),
       });
       if (!isEdit) reset();
@@ -182,9 +184,22 @@ export function CreateProjectModal({
             <input
               type="date"
               value={endDate}
+              disabled={unknownEnd}
               onChange={(e) => setEndDate(e.target.value)}
-              className="h-11 rounded-lg border border-border bg-bg-elevated px-3.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+              className="h-11 rounded-lg border border-border bg-bg-elevated px-3.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
             />
+          </label>
+          <label className="flex items-center gap-2 sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={unknownEnd}
+              onChange={(e) => {
+                setUnknownEnd(e.target.checked);
+                if (e.target.checked) setEndDate("");
+              }}
+              className="h-4 w-4 rounded border-border accent-[var(--accent)]"
+            />
+            <span className="text-sm text-fg-muted">ไม่ระบุวันจบ / ยังไม่รู้วันจบ</span>
           </label>
 
           {error ? (
