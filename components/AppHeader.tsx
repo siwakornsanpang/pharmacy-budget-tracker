@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { ReactNode } from "react";
 import { clearStoredAuth, type AuthUser } from "@/lib/auth";
 
 type AppHeaderProps = {
@@ -9,6 +10,7 @@ type AppHeaderProps = {
   title?: string;
   backHref?: string;
   backLabel?: string;
+  nav?: ReactNode;
 };
 
 export function AppHeader({
@@ -16,6 +18,7 @@ export function AppHeader({
   title,
   backHref,
   backLabel = "กลับ",
+  nav,
 }: AppHeaderProps) {
   const router = useRouter();
 
@@ -26,8 +29,8 @@ export function AppHeader({
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-surface/85 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-6">
-        <div className="flex min-w-0 items-center gap-4">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-6 sm:h-16">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           {backHref ? (
             <Link
               href={backHref}
@@ -63,6 +66,13 @@ export function AppHeader({
           </button>
         </div>
       </div>
+      {nav ? (
+        <div className="border-t border-border/70">
+          <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-6">
+            {nav}
+          </div>
+        </div>
+      ) : null}
     </header>
   );
 }

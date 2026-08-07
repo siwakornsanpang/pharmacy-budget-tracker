@@ -9,13 +9,12 @@ import {
 import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/AuthGate";
 import { AppHeader } from "@/components/AppHeader";
-import { CreateProjectModal } from "@/components/CreateProjectModal";
 import { FinanceCharts } from "@/components/FinanceCharts";
 import { VendorSummary } from "@/components/VendorSummary";
+import { TeamCompositionChart } from "@/components/TeamCompositionChart";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { TransactionFormModal } from "@/components/TransactionFormModal";
-import { ProjectMembersPanel } from "@/components/ProjectMembersPanel";
-import { ProjectPeoplePanel } from "@/components/ProjectPeoplePanel";
+import { ProjectSettingsPanel } from "@/components/ProjectSettingsPanel";
 import { ApiError } from "@/lib/api";
 import {
   createTransaction,
@@ -51,6 +50,7 @@ type ProjectDashboardProps = {
 };
 
 type SortKey = "date" | "amount" | "category" | "title";
+type ProjectTab = "dashboard" | "transactions" | "settings";
 
 function progressTone(percent: number): string {
   if (percent >= 90) return "bg-danger";
@@ -65,7 +65,7 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
   const [loadError, setLoadError] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [people, setPeople] = useState<ProjectPerson[]>([]);
-  const [showEditProject, setShowEditProject] = useState(false);
+  const [activeTab, setActiveTab] = useState<ProjectTab>("dashboard");
   const [showTxnModal, setShowTxnModal] = useState(false);
   const [editingTxn, setEditingTxn] = useState<Transaction | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
@@ -102,8 +102,14 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
+  useEffect(() => {
+    if (activeTab !== "dashboard") return;
+    void fetchPeople(projectId).then(setPeople).catch(() => undefined);
+  }, [activeTab, projectId]);
+
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [filterPayee, setFilterPayee] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("date");
@@ -125,17 +131,31 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
         .map((t) => t.category)
         .filter((c) => {
           if (kindFilter === "general" && c === "ค่าแรง") return false;
-          if (kindFilter === "salary" && c !== "ค่าแรง") return false;
+          if (kindFilter === "salary") return false;
           return Boolean(c);
         }),
     );
 
-    if (kindFilter === "salary") {
-      set.add("ค่าแรง");
-    }
-
     return [...set].sort();
   }, [transactions, kindFilter]);
+
+  const payeesInUse = useMemo(() => {
+    const set = new Set(
+      transactions
+        .filter((t) => (t.kind ?? "general") === "salary")
+        .map((t) => t.to.trim())
+        .filter(Boolean),
+    );
+    return [...set].sort((a, b) => a.localeCompare(b, "th"));
+  }, [transactions]);
+
+  useEffect(() => {
+    if (kindFilter === "salary") {
+      setFilterCategory("all");
+    } else {
+      setFilterPayee("all");
+    }
+  }, [kindFilter]);
 
   useEffect(() => {
     if (
@@ -144,7 +164,13 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
     ) {
       setFilterCategory("all");
     }
-  }, [kindFilter, categoriesInUse, filterCategory]);
+  }, [categoriesInUse, filterCategory]);
+
+  useEffect(() => {
+    if (filterPayee !== "all" && !payeesInUse.includes(filterPayee)) {
+      setFilterPayee("all");
+    }
+  }, [payeesInUse, filterPayee]);
 
   const filtered = useMemo(() => {
     let list = [...transactions];
@@ -161,7 +187,11 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
           (t.note ?? "").toLowerCase().includes(q),
       );
     }
-    if (filterCategory !== "all") {
+    if (kindFilter === "salary") {
+      if (filterPayee !== "all") {
+        list = list.filter((t) => t.to === filterPayee);
+      }
+    } else if (filterCategory !== "all") {
       list = list.filter((t) => t.category === filterCategory);
     }
     if (dateFrom) {
@@ -192,6 +222,7 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
     kindFilter,
     search,
     filterCategory,
+    filterPayee,
     dateFrom,
     dateTo,
     sortKey,
@@ -258,20 +289,8 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
   }
 
   async function handleDeleteProject() {
-    if (!project) return;
-    if (
-      !confirm(
-        `ลบโครงการ "${project.name}" ใช่ไหม? รายการธุรกรรมทั้งหมดจะถูกลบด้วย`,
-      )
-    ) {
-      return;
-    }
-    try {
-      await deleteProject(projectId);
-      router.replace("/projects");
-    } catch (err) {
-      alert(err instanceof ApiError ? err.message : "ลบโครงการไม่สำเร็จ");
-    }
+    await deleteProject(projectId);
+    router.replace("/projects");
   }
 
   function toggleSort(key: SortKey) {
@@ -349,210 +368,220 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
             backHref="/projects"
             backLabel="Projects"
             title={project.name}
+            nav={
+              <>
+                {(
+                  [
+                    ["dashboard", "Dashboard"],
+                    ["transactions", "Transaction"],
+                    ["settings", "Setting"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setActiveTab(key)}
+                    className={`shrink-0 border-b-2 px-3 py-2.5 text-sm font-semibold transition ${
+                      activeTab === key
+                        ? "border-accent text-accent"
+                        : "border-transparent text-fg-muted hover:text-fg"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </>
+            }
           />
 
-          <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8 print:max-w-none print:px-0">
-            {/* Header + export */}
-            <section className="animate-fade-up mb-6">
-              <div className="mb-2 flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <p className="text-sm text-fg-muted">
-                    Project Dashboard
-                  </p>
-                  <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
-                    {project.name}
+          <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-6 print:max-w-none print:px-0 sm:py-8">
+            {(activeTab === "dashboard" || activeTab === "transactions") && (
+              <section className="animate-fade-up mb-5 flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight text-fg sm:text-2xl">
+                    {activeTab === "dashboard" ? "Dashboard" : "Transactions"}
                   </h2>
+                  {activeTab === "dashboard" && project.description ? (
+                    <p className="mt-1 max-w-2xl text-sm leading-relaxed text-fg-muted">
+                      {project.description}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2 print:hidden">
-                  {project.canEditProject ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowEditProject(true)}
-                      className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-fg-muted transition hover:border-accent hover:text-accent"
-                    >
-                      Edit Project
-                    </button>
-                  ) : null}
-                  {project.canDeleteProject ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleDeleteProject()}
-                      className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-fg-muted transition hover:border-danger hover:text-danger"
-                    >
-                      Delete
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      exportTransactionsCsv(project.name, filtered)
-                    }
-                    className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-fg-muted transition hover:border-accent hover:text-accent"
-                  >
-                    Export CSV
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      exportProjectSummaryCsv(project.name, [
-                        { label: "ชื่อโครงการ", value: project.name },
-                        { label: "ผู้ดูแล", value: project.owner },
-                        { label: "งบทั้งหมด", value: project.budget },
-                        { label: "ใช้ไปแล้ว", value: metrics.spent },
-                        { label: "เหลือ", value: metrics.remaining },
-                        { label: "เกิน/เหลืองบ", value: metrics.variance },
-                        { label: "เกิน/เหลือ %", value: metrics.variancePct },
-                        { label: "ใช้เงินคุ้มไหม", value: metrics.cpi },
-                        {
-                          label: "ใช้เฉลี่ยต่อวัน",
-                          value: metrics.burnRatePerDay,
-                        },
-                        {
-                          label: "คาดว่าจะใช้ทั้งหมด",
-                          value: metrics.eac ?? "",
-                        },
-                        {
-                          label: "ตามแผนควรใช้ไปแล้ว",
-                          value: metrics.plannedValue,
-                        },
-                      ])
-                    }
-                    className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-fg-muted transition hover:border-accent hover:text-accent"
-                  >
-                    Export Summary
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => window.print()}
-                    className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-fg-muted transition hover:border-accent hover:text-accent"
-                  >
-                    Print
-                  </button>
-                  {project.canEditTransactions ? (
+                  {activeTab === "dashboard" ? (
                     <>
                       <button
                         type="button"
-                        onClick={() => openCreateTransaction("general")}
-                        className="h-9 rounded-lg bg-accent px-3 text-sm font-semibold text-white transition hover:bg-accent-hover"
+                        onClick={() =>
+                          exportProjectSummaryCsv(project.name, [
+                            { label: "ชื่อโครงการ", value: project.name },
+                            { label: "ผู้ดูแล", value: project.owner },
+                            { label: "งบทั้งหมด", value: project.budget },
+                            { label: "ใช้ไปแล้ว", value: metrics.spent },
+                            { label: "เหลือ", value: metrics.remaining },
+                            { label: "เกิน/เหลืองบ", value: metrics.variance },
+                            {
+                              label: "เกิน/เหลือ %",
+                              value: metrics.variancePct,
+                            },
+                            { label: "ใช้เงินคุ้มไหม", value: metrics.cpi },
+                            {
+                              label: "ใช้เฉลี่ยต่อวัน",
+                              value: metrics.burnRatePerDay,
+                            },
+                            {
+                              label: "คาดว่าจะใช้ทั้งหมด",
+                              value: metrics.eac ?? "",
+                            },
+                            {
+                              label: "ตามแผนควรใช้ไปแล้ว",
+                              value: metrics.plannedValue,
+                            },
+                          ])
+                        }
+                        className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-fg-muted transition hover:border-accent hover:text-accent"
                       >
-                        + รายจ่ายทั่วไป
+                        Export Report
                       </button>
+                      {project.canEditTransactions ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => openCreateTransaction("general")}
+                            className="h-9 rounded-lg bg-accent px-3 text-sm font-semibold text-white transition hover:bg-accent-hover"
+                          >
+                            + รายจ่ายทั่วไป
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openCreateTransaction("salary")}
+                            className="h-9 rounded-lg border border-accent px-3 text-sm font-semibold text-accent transition hover:bg-accent-soft"
+                          >
+                            + ค่าแรง
+                          </button>
+                        </>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
                       <button
                         type="button"
-                        onClick={() => openCreateTransaction("salary")}
-                        className="h-9 rounded-lg border border-accent px-3 text-sm font-semibold text-accent transition hover:bg-accent-soft"
+                        onClick={() =>
+                          exportTransactionsCsv(project.name, filtered)
+                        }
+                        className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-fg-muted transition hover:border-accent hover:text-accent"
                       >
-                        + ค่าแรง
+                        Export CSV
                       </button>
+                      {project.canEditTransactions ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => openCreateTransaction("general")}
+                            className="h-9 rounded-lg bg-accent px-3 text-sm font-semibold text-white transition hover:bg-accent-hover"
+                          >
+                            + รายจ่ายทั่วไป
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openCreateTransaction("salary")}
+                            className="h-9 rounded-lg border border-accent px-3 text-sm font-semibold text-accent transition hover:bg-accent-soft"
+                          >
+                            + ค่าแรง
+                          </button>
+                        </>
+                      ) : null}
                     </>
-                  ) : null}
+                  )}
                 </div>
-              </div>
+              </section>
+            )}
 
-              <p className="mb-4 max-w-2xl text-sm leading-relaxed text-fg-muted">
-                {project.description}
-              </p>
+            {activeTab === "settings" ? (
+              <section className="animate-fade-up mb-5">
+                <h2 className="font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight text-fg sm:text-2xl">
+                  Setting
+                </h2>
+                <p className="mt-1 text-sm text-fg-muted">
+                  จัดการข้อมูลโครงการ สมาชิก และทีม
+                </p>
+              </section>
+            ) : null}
 
-              <div className="grid gap-4 sm:grid-cols-3">
-                <StatBlock
-                  label="Total Budget"
-                  value={formatCurrency(project.budget)}
-                />
-                <StatBlock
-                  label="Spent"
-                  value={formatCurrency(metrics.spent)}
-                  accent
-                />
-                <StatBlock
-                  label={metrics.remaining >= 0 ? "Remaining" : "Over Budget"}
-                  value={formatCurrency(Math.abs(metrics.remaining))}
-                  danger={metrics.remaining < 0}
-                  good={metrics.remaining >= 0}
-                />
-              </div>
-
-              <div className="mt-5">
-                <div className="mb-2 flex justify-between text-xs text-fg-subtle">
-                  <span>
-                    {formatDate(project.startDate)} –{" "}
-                    {project.endDate
-                      ? formatDate(project.endDate)
-                      : "ไม่ระบุวันจบ"}
-                  </span>
-                  <span>Owner · {project.owner}</span>
-                </div>
-                <div className="h-3 overflow-hidden rounded-full bg-accent-soft">
-                  <div
-                    className={`animate-progress h-full rounded-full ${progressTone(metrics.percentUsed)}`}
-                    style={{
-                      width: `${Math.min(metrics.percentUsed, 100)}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            </section>
-
-            {/* Charts + vendors */}
-            <section
-              className="animate-fade-up mb-8"
-              style={{ animationDelay: "80ms" }}
-            >
-              <h3 className="mb-4 text-lg font-semibold text-fg">
-                Charts
-              </h3>
-              <div className="mb-5">
-                <FinanceCharts
-                  transactions={transactions}
-                  budget={project.budget}
-                  spent={metrics.spent}
-                />
-              </div>
-              <VendorSummary transactions={transactions} />
-            </section>
-
-            <section
-              className="animate-fade-up mb-8 grid gap-5 print:hidden lg:grid-cols-2"
-              style={{ animationDelay: "90ms" }}
-            >
-              <ProjectMembersPanel
-                projectId={projectId}
-                canManage={Boolean(project.canManageMembers)}
-              />
-              <ProjectPeoplePanel
-                projectId={projectId}
-                canManage={Boolean(project.canManagePeople)}
-              />
-            </section>
-
-            {/* Transactions */}
-            <section
-              className="animate-fade-up mb-6 print:hidden"
-              style={{ animationDelay: "100ms" }}
-            >
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-lg font-semibold text-fg">
-                  Transactions
-                </h3>
-                {project.canEditTransactions ? (
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openCreateTransaction("general")}
-                      className="h-10 rounded-lg bg-accent px-4 text-sm font-semibold text-white transition hover:bg-accent-hover"
-                    >
-                      + รายจ่ายทั่วไป
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openCreateTransaction("salary")}
-                      className="h-10 rounded-lg border border-accent px-4 text-sm font-semibold text-accent transition hover:bg-accent-soft"
-                    >
-                      + ค่าแรง
-                    </button>
+            {activeTab === "dashboard" ? (
+              <>
+                <section className="animate-fade-up mb-6">
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <StatBlock
+                      label="Total Budget"
+                      value={formatCurrency(project.budget)}
+                    />
+                    <StatBlock
+                      label="Spent"
+                      value={formatCurrency(metrics.spent)}
+                      accent
+                    />
+                    <StatBlock
+                      label={
+                        metrics.remaining >= 0 ? "Remaining" : "Over Budget"
+                      }
+                      value={formatCurrency(Math.abs(metrics.remaining))}
+                      danger={metrics.remaining < 0}
+                      good={metrics.remaining >= 0}
+                    />
                   </div>
-                ) : null}
-              </div>
 
+                  <div className="mt-5">
+                    <div className="mb-2 flex justify-between text-xs text-fg-subtle">
+                      <span>
+                        {formatDate(project.startDate)} –{" "}
+                        {project.endDate
+                          ? formatDate(project.endDate)
+                          : "ไม่ระบุวันจบ"}
+                      </span>
+                      <span>Owner · {project.owner}</span>
+                    </div>
+                    <div className="h-3 overflow-hidden rounded-full bg-accent-soft">
+                      <div
+                        className={`animate-progress h-full rounded-full ${progressTone(metrics.percentUsed)}`}
+                        style={{
+                          width: `${Math.min(metrics.percentUsed, 100)}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <section
+                  className="animate-fade-up mb-8"
+                  style={{ animationDelay: "80ms" }}
+                >
+                  <h3 className="mb-4 text-lg font-semibold text-fg">Charts</h3>
+                  <div className="mb-5">
+                    <FinanceCharts transactions={transactions} />
+                  </div>
+                  <div className="mb-5">
+                    <VendorSummary transactions={transactions} />
+                  </div>
+                  <TeamCompositionChart people={people} />
+                </section>
+              </>
+            ) : null}
+
+            {activeTab === "settings" ? (
+              <section className="animate-fade-up mb-8">
+                <ProjectSettingsPanel
+                  project={project}
+                  projectId={projectId}
+                  onSave={handleUpdateProject}
+                  onDelete={handleDeleteProject}
+                />
+              </section>
+            ) : null}
+
+            {activeTab === "transactions" ? (
+              <>
+            <section className="animate-fade-up mb-6">
               <div className="mb-4 flex flex-wrap gap-2">
                 {(
                   [
@@ -576,7 +605,6 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                 ))}
               </div>
 
-              {/* Filters */}
               <div className="mb-4 grid gap-3 rounded-2xl border border-border bg-surface p-4 sm:grid-cols-2 lg:grid-cols-5">
                 <input
                   type="search"
@@ -585,24 +613,37 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                   placeholder="Search title, payee, ref, note..."
                   className="input lg:col-span-2"
                 />
-                <select
-                  value={filterCategory}
-                  onChange={(e) => setFilterCategory(e.target.value)}
-                  className="input"
-                >
-                  <option value="all">
-                    {kindFilter === "salary"
-                      ? "ทุกหมวดค่าแรง"
-                      : kindFilter === "general"
+                {kindFilter === "salary" ? (
+                  <select
+                    value={filterPayee}
+                    onChange={(e) => setFilterPayee(e.target.value)}
+                    className="input"
+                  >
+                    <option value="all">ทุกคนที่จ่ายให้</option>
+                    {payeesInUse.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="input"
+                  >
+                    <option value="all">
+                      {kindFilter === "general"
                         ? "ทุกหมวดรายจ่ายทั่วไป"
                         : "All categories"}
-                  </option>
-                  {categoriesInUse.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
                     </option>
-                  ))}
-                </select>
+                    {categoriesInUse.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <input
                   type="date"
                   value={dateFrom}
@@ -626,10 +667,7 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
               </p>
             </section>
 
-            <section
-              className="animate-fade-up overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow)]"
-              style={{ animationDelay: "140ms" }}
-            >
+            <section className="animate-fade-up overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow)]">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[720px] text-left text-sm">
                   <thead>
@@ -780,6 +818,8 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
                 </table>
               </div>
             </section>
+              </>
+            ) : null}
           </main>
 
           {receiptPreview ? (
@@ -830,13 +870,6 @@ export function ProjectDashboard({ projectId }: ProjectDashboardProps) {
               </div>
             </div>
           ) : null}
-
-          <CreateProjectModal
-            open={showEditProject}
-            initial={project}
-            onClose={() => setShowEditProject(false)}
-            onSave={handleUpdateProject}
-          />
 
           <TransactionFormModal
             open={showTxnModal}

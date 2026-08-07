@@ -126,7 +126,7 @@ export function TransactionFormModal({
     setError("");
     try {
       let nextReceiptUrl = receiptUrl;
-      if (kind === "salary" && receiptFile) {
+      if (receiptFile) {
         const uploaded = await uploadReceipt(projectId, receiptFile);
         nextReceiptUrl = uploaded.url;
       }
@@ -155,6 +155,7 @@ export function TransactionFormModal({
               amount: parsedAmount,
               to: to.trim(),
               note: note.trim() || undefined,
+              receiptUrl: nextReceiptUrl,
             },
       );
       onClose();
@@ -367,43 +368,41 @@ export function TransactionFormModal({
             />
           </label>
 
-          {kind === "salary" ? (
-            <div className="space-y-2 sm:col-span-2">
-              <span className="text-xs font-medium text-fg-muted">
-                ใบเสร็จ / หลักฐาน (รูปหรือ PDF)
-              </span>
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
-                onChange={(e) => {
-                  const file = e.target.files?.[0] ?? null;
-                  setReceiptFile(file);
-                }}
-                className="block w-full text-sm text-fg-muted file:mr-3 file:rounded-lg file:border-0 file:bg-accent-soft file:px-3 file:py-2 file:text-sm file:font-medium file:text-accent"
-              />
-              {receiptFile ? (
-                <p className="text-xs text-fg-subtle">
-                  ไฟล์ใหม่: {receiptFile.name}
-                </p>
-              ) : receiptUrl ? (
-                <p className="text-xs text-fg-subtle">
-                  มีใบเสร็จอยู่แล้ว ·{" "}
-                  <a
-                    href={receiptUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-accent hover:underline"
-                  >
-                    เปิดดู
-                  </a>
-                </p>
-              ) : (
-                <p className="text-xs text-fg-subtle">
-                  ไม่บังคับ · รองรับ JPG/PNG/PDF สูงสุด 5MB
-                </p>
-              )}
-            </div>
-          ) : null}
+          <div className="space-y-2 sm:col-span-2">
+            <span className="text-xs font-medium text-fg-muted">
+              ใบเสร็จ / หลักฐาน (รูปหรือ PDF)
+            </span>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                setReceiptFile(file);
+              }}
+              className="block w-full text-sm text-fg-muted file:mr-3 file:rounded-lg file:border-0 file:bg-accent-soft file:px-3 file:py-2 file:text-sm file:font-medium file:text-accent"
+            />
+            {receiptFile ? (
+              <p className="text-xs text-fg-subtle">
+                ไฟล์ใหม่: {receiptFile.name}
+              </p>
+            ) : receiptUrl ? (
+              <p className="text-xs text-fg-subtle">
+                มีใบเสร็จอยู่แล้ว ·{" "}
+                <a
+                  href={receiptUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-accent hover:underline"
+                >
+                  เปิดดู
+                </a>
+              </p>
+            ) : (
+              <p className="text-xs text-fg-subtle">
+                ไม่บังคับ · รองรับ JPG/PNG/PDF สูงสุด 5MB
+              </p>
+            )}
+          </div>
 
           {error ? (
             <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger sm:col-span-2">

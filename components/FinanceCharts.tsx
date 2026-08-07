@@ -32,15 +32,9 @@ const CHART_COLORS = [
 
 type FinanceChartsProps = {
   transactions: Transaction[];
-  budget: number;
-  spent: number;
 };
 
-export function FinanceCharts({
-  transactions,
-  budget,
-  spent,
-}: FinanceChartsProps) {
+export function FinanceCharts({ transactions }: FinanceChartsProps) {
   const categoryData = useMemo(() => {
     const map = new Map<string, number>();
     for (const t of transactions) {
@@ -51,20 +45,18 @@ export function FinanceCharts({
       .sort((a, b) => b.value - a.value);
   }, [transactions]);
 
-  const budgetData = useMemo(() => {
-    const remaining = Math.max(budget - spent, 0);
-    const over = Math.max(spent - budget, 0);
-    if (over > 0) {
-      return [
-        { name: "งบที่ตั้งไว้", value: budget },
-        { name: "ใช้เกินงบ", value: over },
-      ];
+  const kindData = useMemo(() => {
+    let general = 0;
+    let salary = 0;
+    for (const t of transactions) {
+      if ((t.kind ?? "general") === "salary") salary += t.amount;
+      else general += t.amount;
     }
     return [
-      { name: "ใช้ไปแล้ว", value: spent },
-      { name: "ยังเหลือ", value: remaining },
-    ];
-  }, [budget, spent]);
+      { name: "รายจ่ายทั่วไป", value: general, color: "#737300" },
+      { name: "ค่าแรง", value: salary, color: "#b8b83a" },
+    ].filter((d) => d.value > 0);
+  }, [transactions]);
 
   const monthlyData = useMemo(() => {
     const map = new Map<string, number>();
@@ -81,6 +73,7 @@ export function FinanceCharts({
   }, [transactions]);
 
   const totalCategory = categoryData.reduce((s, d) => s + d.value, 0);
+  const totalKind = kindData.reduce((s, d) => s + d.value, 0);
 
   if (transactions.length === 0) {
     return (
@@ -159,18 +152,20 @@ export function FinanceCharts({
         </div>
       </div>
 
-      {/* Budget used vs remaining */}
+      {/* General vs salary */}
       <div className="rounded-2xl border border-border bg-surface p-5 shadow-[var(--shadow)]">
-        <h3 className="mb-1 text-sm font-semibold text-fg">Budget vs Spent</h3>
+        <h3 className="mb-1 text-sm font-semibold text-fg">
+          General vs Labor
+        </h3>
         <p className="mb-4 text-xs text-fg-subtle">
-          ดูว่าใช้ไปแล้วเท่าไหร่ และยังเหลือเท่าไหร่
+          สัดส่วนรายจ่ายทั่วไปเทียบกับค่าแรง
         </p>
         <div className="flex flex-col items-center gap-4 sm:flex-row">
           <div className="h-52 w-full max-w-[220px] shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={budgetData}
+                  data={kindData}
                   dataKey="value"
                   nameKey="name"
                   cx="50%"
@@ -180,8 +175,9 @@ export function FinanceCharts({
                   paddingAngle={2}
                   stroke="none"
                 >
-                  <Cell fill="#737300" />
-                  <Cell fill={spent > budget ? "#b93a3a" : "#d4d48a"} />
+                  {kindData.map((item) => (
+                    <Cell key={item.name} fill={item.color} />
+                  ))}
                 </Pie>
                 <Tooltip
                   formatter={(value) => formatCurrency(Number(value ?? 0))}
@@ -191,29 +187,31 @@ export function FinanceCharts({
             </ResponsiveContainer>
           </div>
           <ul className="flex w-full flex-col gap-3">
-            {budgetData.map((item, i) => (
-              <li key={item.name} className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-sm text-fg-muted">
-                  <span
-                    className="h-2.5 w-2.5 rounded-sm"
-                    style={{
-                      background:
-                        i === 0
-                          ? "#737300"
-                          : spent > budget
-                            ? "#b93a3a"
-                            : "#d4d48a",
-                    }}
-                  />
-                  {item.name}
-                </span>
-                <span className="text-sm font-semibold tabular-nums text-fg">
-                  {formatCurrency(item.value)}
-                </span>
-              </li>
-            ))}
+            {kindData.map((item) => {
+              const pct =
+                totalKind > 0
+                  ? Math.round((item.value / totalKind) * 100)
+                  : 0;
+              return (
+                <li
+                  key={item.name}
+                  className="flex items-center justify-between gap-2"
+                >
+                  <span className="flex items-center gap-2 text-sm text-fg-muted">
+                    <span
+                      className="h-2.5 w-2.5 rounded-sm"
+                      style={{ background: item.color }}
+                    />
+                    {item.name}
+                  </span>
+                  <span className="text-sm font-semibold tabular-nums text-fg">
+                    {pct}% · {formatCurrency(item.value)}
+                  </span>
+                </li>
+              );
+            })}
             <li className="border-t border-border pt-3 text-xs text-fg-subtle">
-              งบทั้งหมด {formatCurrency(budget)}
+              รวมที่ใช้ไป {formatCurrency(totalKind)}
             </li>
           </ul>
         </div>
